@@ -44,7 +44,7 @@ jobs:
           mkdir -p spoofdpi
           mkdir -p src-tauri/binaries
           cd SpoofDPI-src
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../spoofdpi/bypax-proxy.exe ./cmd/spoofdpi
+          go build -trimpath -ldflags="-s -w" -o ../spoofdpi/bypax-proxy.exe ./cmd/spoofdpi
           echo "SpoofDPI build OK"
 
       - name: Copy proxy binary to tauri binaries
