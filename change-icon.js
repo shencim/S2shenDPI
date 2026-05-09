@@ -38,10 +38,10 @@ async function main() {
         await rcedit(exePath, {
             icon: iconPath,
             'version-string': {
-                ProductName: 'BypaxDPI',
-                FileDescription: 'BypaxDPI Service',
+                ProductName: 'DarknesDPI',
+                FileDescription: 'DarknesDPI Service',
                 CompanyName: 'ConsolAktif',
-                LegalCopyright: 'Copyright © 2026 ConsolAktif'
+                LegalCopyright: 'Copyright © 2026 Shencim'
             }
         });
         console.log('Icon updated successfully!');

@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Siyah arka plan gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#1a0a0a"/>
+      <stop offset="100%" stop-color="#050505"/>
+    </radialGradient>
+
+    <!-- Kırmızı parlama gradient -->
+    <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff2222" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ff0000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- D harfi kırmızı gradient -->
+    <linearGradient id="dGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4444"/>
+      <stop offset="50%" stop-color="#cc0000"/>
+      <stop offset="100%" stop-color="#880000"/>
+    </linearGradient>
+
+    <!-- Dış halka gradient -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff3333"/>
+      <stop offset="50%" stop-color="#990000"/>
+      <stop offset="100%" stop-color="#ff3333"/>
+    </linearGradient>
+
+    <!-- İç parlama filtresi -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Yumuşak glow filtresi -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Drop shadow -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#cc0000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Arka plan yuvarlak kare -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)"/>
+
+  <!-- Kırmızı arka plan parlama -->
+  <ellipse cx="256" cy="220" rx="200" ry="180" fill="url(#glowGrad)"/>
+
+  <!-- Dış dekoratif halka (kesik daire) -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="url(#ringGrad)" stroke-width="1.5" stroke-dasharray="12 6" opacity="0.4"/>
+
+  <!-- Orta dekoratif halka -->
+  <circle cx="256" cy="256" r="185" fill="none" stroke="#cc0000" stroke-width="0.8" opacity="0.25"/>
+
+  <!-- Sol dikey kırmızı çizgi aksanı -->
+  <rect x="88" y="160" width="3" height="192" rx="2" fill="#cc0000" opacity="0.6"/>
+  <rect x="96" y="190" width="1.5" height="132" rx="1" fill="#ff4444" opacity="0.4"/>
+
+  <!-- Sağ dikey kırmızı çizgi aksanı -->
+  <rect x="421" y="160" width="3" height="192" rx="2" fill="#cc0000" opacity="0.6"/>
+  <rect x="414.5" y="190" width="1.5" height="132" rx="1" fill="#ff4444" opacity="0.4"/>
+
+  <!-- Üst yatay ince çizgi -->
+  <line x1="140" y1="148" x2="372" y2="148" stroke="#cc0000" stroke-width="1" opacity="0.5"/>
+  <!-- Alt yatay ince çizgi -->
+  <line x1="140" y1="364" x2="372" y2="364" stroke="#cc0000" stroke-width="1" opacity="0.5"/>
+
+  <!-- Ana D harfi gövdesi - kalın serif D -->
+  <!-- Sol dikey çubuk -->
+  <rect x="138" y="142" width="52" height="228" rx="8" fill="url(#dGrad)" filter="url(#shadow)"/>
+
+  <!-- D'nin yay kısmı (sağ kavis) - büyük path -->
+  <path d="
+    M 184 142
+    L 270 142
+    Q 390 142 390 256
+    Q 390 370 270 370
+    L 184 370
+    Z
+  " fill="url(#dGrad)" filter="url(#shadow)"/>
+
+  <!-- İç boşluk (D'nin içi) - siyah -->
+  <path d="
+    M 192 194
+    L 262 194
+    Q 334 194 334 256
+    Q 334 318 262 318
+    L 192 318
+    Z
+  " fill="#0a0202"/>
+
+  <!-- İç boşluğa hafif kırmızı yansıma -->
+  <path d="
+    M 192 194
+    L 262 194
+    Q 334 194 334 256
+    Q 334 318 262 318
+    L 192 318
+    Z
+  " fill="url(#glowGrad)" opacity="0.15"/>
+
+  <!-- D harfi üst parlama (highlight) -->
+  <path d="
+    M 148 150
+    L 270 150
+    Q 310 150 340 170
+    Q 310 158 270 158
+    L 148 158
+    Z
+  " fill="white" opacity="0.08"/>
+
+  <!-- Orta yatay aksent çizgisi (D'nin göbeğinde) -->
+  <rect x="138" y="246" width="52" height="20" rx="0" fill="#aa0000" opacity="0.5"/>
+
+  <!-- Köşe dekoratif noktalar -->
+  <circle cx="138" cy="142" r="5" fill="#ff3333" opacity="0.7" filter="url(#softGlow)"/>
+  <circle cx="190" cy="142" r="3" fill="#ff3333" opacity="0.5"/>
+  <circle cx="138" cy="370" r="5" fill="#ff3333" opacity="0.7" filter="url(#softGlow)"/>
+  <circle cx="190" cy="370" r="3" fill="#ff3333" opacity="0.5"/>
+
+  <!-- Alt metin: DARKNES DPI -->
+  <text
+    x="256"
+    y="428"
+    font-family="'Arial Black', 'Impact', sans-serif"
+    font-size="36"
+    font-weight="900"
+    fill="#cc2222"
+    text-anchor="middle"
+    letter-spacing="6"
+    filter="url(#softGlow)"
+  >DARKNES</text>
+
+  <text
+    x="256"
+    y="462"
+    font-family="'Arial', sans-serif"
+    font-size="16"
+    font-weight="400"
+    fill="#882222"
+    text-anchor="middle"
+    letter-spacing="10"
+    opacity="0.9"
+  >DPI</text>
+
+  <!-- Üst küçük dekoratif sembol -->
+  <text
+    x="256"
+    y="126"
+    font-family="'Arial', sans-serif"
+    font-size="13"
+    fill="#cc0000"
+    text-anchor="middle"
+    letter-spacing="4"
+    opacity="0.6"
+  >◆ ◆ ◆</text>
+
+</svg>
