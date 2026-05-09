@@ -9,9 +9,35 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
-    runs-on: windows-latest
+  # ── JOB 1: Linux'ta SpoofDPI'yi Windows için cross-compile et ──
+  build-proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
 
+      - name: Cross-compile SpoofDPI v1.2.1 for Windows
+        run: |
+          curl -L "https://github.com/xvzc/SpoofDPI/archive/refs/tags/v1.2.1.tar.gz" -o spoofdpi.tar.gz
+          tar xzf spoofdpi.tar.gz
+          cd SpoofDPI-1.2.1
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o bypax-proxy.exe ./cmd/spoofdpi
+          echo "Build OK"
+          ls -lh bypax-proxy.exe
+
+      - name: Upload proxy binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: bypax-proxy
+          path: SpoofDPI-1.2.1/bypax-proxy.exe
+          retention-days: 1
+
+  # ── JOB 2: Windows'ta Tauri build ──
+  build-tauri:
+    needs: build-proxy
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,36 +61,32 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Download SpoofDPI Windows binary
+      - name: Download proxy binary
+        uses: actions/download-artifact@v4
+        with:
+          name: bypax-proxy
+          path: spoofdpi/
+
+      - name: Copy proxy binary to tauri binaries
         shell: bash
         run: |
           mkdir -p src-tauri/binaries
-          # SpoofDPI v1.2.1 Windows amd64 binary indir
-          curl -L --retry 3 \
-            "https://github.com/xvzc/SpoofDPI/releases/download/v1.2.1/spoofdpi-windows-amd64.zip" \
-            -o spoofdpi.zip
-          unzip -o spoofdpi.zip -d spoofdpi-extracted/
-          # Binary'i bul ve kopyala
-          find spoofdpi-extracted/ -name "*.exe" | head -1 | xargs -I{} cp {} src-tauri/binaries/bypax-proxy.exe
-          cp src-tauri/binaries/bypax-proxy.exe "src-tauri/binaries/bypax-proxy-x86_64-pc-windows-msvc.exe"
-          echo "Binary hazır:"
+          cp spoofdpi/bypax-proxy.exe src-tauri/binaries/bypax-proxy.exe
+          cp spoofdpi/bypax-proxy.exe "src-tauri/binaries/bypax-proxy-x86_64-pc-windows-msvc.exe"
           ls -lh src-tauri/binaries/
 
-      - name: Update proxy icon (change-icon.js)
+      - name: Update proxy icon
         shell: bash
-        run: node change-icon.js || echo "Icon update skipped (non-critical)"
+        run: node change-icon.js || echo "Icon update skipped"
 
       - name: Download Npcap installer
         shell: bash
         run: |
-          curl -L --retry 3 --max-time 60 \
+          curl -L --retry 3 --max-time 120 \
             "https://npcap.com/dist/npcap-1.79.exe" \
             -o "src-tauri/binaries/npcap-installer.exe" \
             --user-agent "Mozilla/5.0"
           ls -lh src-tauri/binaries/npcap-installer.exe
-
-      - name: Build frontend (vite)
-        run: npx vite build
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
