@@ -35,29 +35,48 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Clone SpoofDPI source
-        run: |
-          git clone --depth 1 --branch v1.2.1 https://github.com/xvzc/SpoofDPI.git SpoofDPI-1.2.1/SpoofDPI-1.2.1
         shell: bash
+        run: |
+          # v1.2.1 tag dene, yoksa main'den son sürümü al
+          git clone --depth 1 https://github.com/xvzc/SpoofDPI.git SpoofDPI-src || true
+          if [ ! -f "SpoofDPI-src/go.mod" ]; then
+            echo "Clone failed, retrying..."
+            git clone https://github.com/xvzc/SpoofDPI.git SpoofDPI-src
+          fi
 
       - name: Build SpoofDPI (bypax-proxy)
+        shell: bash
         run: |
           mkdir -p spoofdpi
           mkdir -p src-tauri/binaries
-          cd SpoofDPI-1.2.1/SpoofDPI-1.2.1
-          go build -trimpath -ldflags="-s -w" -o ../../spoofdpi/bypax-proxy.exe ./cmd/spoofdpi
-        shell: bash
+          cd SpoofDPI-src
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../spoofdpi/bypax-proxy.exe ./cmd/spoofdpi
+          echo "Build OK"
+          ls -lh ../spoofdpi/bypax-proxy.exe
 
       - name: Copy proxy binary to tauri binaries
-        run: node scripts/copy-proxy.cjs
         shell: bash
+        run: |
+          mkdir -p src-tauri/binaries
+          cp spoofdpi/bypax-proxy.exe src-tauri/binaries/bypax-proxy.exe
+          cp spoofdpi/bypax-proxy.exe "src-tauri/binaries/bypax-proxy-x86_64-pc-windows-msvc.exe"
+          echo "Binary copied:"
+          ls -lh src-tauri/binaries/
 
       - name: Download Npcap installer
-        run: |
-          curl -L "https://npcap.com/dist/npcap-1.79.exe" -o "src-tauri/binaries/npcap-installer.exe"
         shell: bash
+        run: |
+          curl -L --retry 3 "https://npcap.com/dist/npcap-1.79.exe" \
+            -o "src-tauri/binaries/npcap-installer.exe" \
+            --user-agent "Mozilla/5.0"
+          echo "Npcap size:"
+          ls -lh src-tauri/binaries/npcap-installer.exe
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Build frontend
+        run: npm run build
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -65,7 +84,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v1.0.0
-          releaseName: 'BypaxDPI v1.0.0'
+          releaseName: 'DarknesDPI v1.0.0'
           releaseBody: 'Windows için DPI bypass uygulaması.'
           releaseDraft: false
           prerelease: false
