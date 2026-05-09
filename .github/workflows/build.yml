@@ -22,11 +22,65 @@ jobs:
         run: |
           curl -L "https://github.com/xvzc/SpoofDPI/archive/refs/tags/v1.2.1.tar.gz" -o spoofdpi.tar.gz
           tar xzf spoofdpi.tar.gz
-          # Klasör adını otomatik bul (SpoofDPI-1.2.1 veya xvzc-SpoofDPI-... olabilir)
-          SPOOFDIR=$(find . -maxdepth 1 -type d -name "*SpoofDPI*" -o -maxdepth 1 -type d -name "*spoofdpi*" | head -1)
-          echo "Bulunan klasör: $SPOOFDIR"
-          ls -la
+          SPOOFDIR=$(find . -maxdepth 1 -type d | grep -i spoof | head -1)
+          echo "Klasör: $SPOOFDIR"
           cd "$SPOOFDIR"
+
+          # conn.go'yu sadece !windows için işaretle
+          sed -i '1s/^/\/\/go:build !windows\n\n/' internal/netutil/conn.go
+
+          # Windows için ayrı stub dosyası oluştur
+          cat > internal/netutil/conn_windows.go << 'GOEOF'
+          //go:build windows
+
+          package netutil
+
+          import (
+            "context"
+            "errors"
+            "fmt"
+            "io"
+            "net"
+
+            "github.com/rs/zerolog"
+            "github.com/xvzc/SpoofDPI/internal/logging"
+          )
+
+          func TunnelConns(
+            ctx context.Context,
+            logger zerolog.Logger,
+            errCh chan<- error,
+            dst net.Conn,
+            src net.Conn,
+          ) {
+            var n int64
+            logger = logging.WithLocalScope(ctx, logger, "tunnel")
+
+            stop := context.AfterFunc(ctx, func() { CloseConns(src, dst) })
+            defer func() {
+              stop()
+              CloseConns(src, dst)
+              logger.Trace().Int64("len", n).
+                Str("route", fmt.Sprintf("%s -> %s", src.RemoteAddr(), dst.RemoteAddr())).
+                Msgf("done")
+            }()
+
+            bufPtr := bufferPool.Get().(*[]byte)
+            defer bufferPool.Put(bufPtr)
+
+            n, err := io.CopyBuffer(dst, src, *bufPtr)
+            if err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
+              errCh <- err
+              return
+            }
+            errCh <- nil
+          }
+
+          func SetTTL(conn net.Conn, isIPv4 bool, ttl uint8) error {
+            return nil
+          }
+          GOEOF
+
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../bypax-proxy.exe ./cmd/spoofdpi
           echo "Build OK"
           ls -lh ../bypax-proxy.exe
