@@ -1,6 +1,6 @@
 [package]
 name = "DarknesDPI"
-version = "1.0.0"
+version = "2.0.0"
 description = "Dpi Bypass Tool."
 authors = ["Shencim"]
 edition = "2021"

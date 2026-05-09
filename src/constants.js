@@ -25,7 +25,7 @@ export const DOH_MAP = {
 
 export const APP = {
   name: "DarknesDPI",
-  version: "1.0.0",
+  version: "2.0.0",
   designWidth: 380,
   designHeight: 700,
   maxLogs: 100,

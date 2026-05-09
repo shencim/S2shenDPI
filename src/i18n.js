@@ -262,6 +262,40 @@ const translations = {
     tabNetwork: 'AĞ',
     tabNotification: 'BİLDİRİM',
     tabSystem: 'SİSTEM',
+
+    // ISP Tespiti
+    ispDetected: (name) => `${name} tespit edildi`,
+    ispSuggestion: (profile) => `${profile} modu önerilir`,
+    ispAutoSelected: 'Sağlayıcınız otomatik seçildi',
+
+    // Bağlantı İstatistikleri
+    statsUptime: 'Süre',
+    statsPing: 'Ping',
+    statsMs: 'ms',
+
+    // Güncelleme
+    updateAvailable: (ver) => `Yeni sürüm mevcut: v${ver}`,
+    updateDownload: 'İndir',
+    updateDismiss: 'Sonra',
+
+    // Özel Domain Listesi
+    sectionDomains: 'ÖZEL DOMAIN LİSTESİ',
+    sectionDomainsDesc: 'Bu domainler proxy\'den muaf tutulur (DIRECT bağlantı).',
+    domainAdd: 'Ekle',
+    domainRemove: 'Kaldır',
+    domainPlaceholder: 'örn: *.example.com veya site.com',
+    domainEmpty: 'Henüz domain eklenmedi.',
+
+    // Profil Kaydetme
+    sectionProfiles: 'AYAR PROFİLLERİ',
+    sectionProfilesDesc: 'Mevcut ayarlarınızı kaydedip tek tıkla yükleyin.',
+    profileSave: 'Mevcut Ayarları Kaydet',
+    profileLoad: 'Yükle',
+    profileDelete: 'Sil',
+    profileName: 'Profil adı girin...',
+    profileSaved: 'Profil kaydedildi!',
+    profileLoaded: 'Profil yüklendi!',
+    profileEmpty: 'Henüz profil kaydedilmedi.',
   },
 
   en: {
@@ -527,6 +561,40 @@ const translations = {
     tabNetwork: 'NETWORK',
     tabNotification: 'ALERTS',
     tabSystem: 'SYSTEM',
+
+    // ISP Detection
+    ispDetected: (name) => `${name} detected`,
+    ispSuggestion: (profile) => `${profile} mode recommended`,
+    ispAutoSelected: 'Your ISP was auto-selected',
+
+    // Connection Statistics
+    statsUptime: 'Uptime',
+    statsPing: 'Ping',
+    statsMs: 'ms',
+
+    // Update
+    updateAvailable: (ver) => `New version available: v${ver}`,
+    updateDownload: 'Download',
+    updateDismiss: 'Later',
+
+    // Custom Domain List
+    sectionDomains: 'CUSTOM DOMAIN LIST',
+    sectionDomainsDesc: 'These domains bypass the proxy (DIRECT connection).',
+    domainAdd: 'Add',
+    domainRemove: 'Remove',
+    domainPlaceholder: 'e.g. *.example.com or site.com',
+    domainEmpty: 'No domains added yet.',
+
+    // Profile Saving
+    sectionProfiles: 'SETTINGS PROFILES',
+    sectionProfilesDesc: 'Save your current settings and load them in one click.',
+    profileSave: 'Save Current Settings',
+    profileLoad: 'Load',
+    profileDelete: 'Delete',
+    profileName: 'Enter profile name...',
+    profileSaved: 'Profile saved!',
+    profileLoaded: 'Profile loaded!',
+    profileEmpty: 'No profiles saved yet.',
   }
 };
 

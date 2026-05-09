@@ -25,7 +25,7 @@ const Toggle = ({ checked, onChange }) => (
   </div>
 );
 
-const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies }) => {
+const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies, savedProfiles = [], saveProfile, loadProfile, deleteProfile }) => {
   const [activeTab, setActiveTab] = useState('general');
   const scrollRef = useRef(null);
 
@@ -50,6 +50,38 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies 
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [sortedProviders, setSortedProviders] = useState([]);
   const [fixStatus, setFixStatus] = useState('idle');
+
+  // Profil kaydetme
+  const [profileNameInput, setProfileNameInput] = useState('');
+  const [profileFeedback, setProfileFeedback] = useState(null);
+  const handleSaveProfile = () => {
+    if (!profileNameInput.trim()) return;
+    saveProfile?.(profileNameInput.trim());
+    setProfileNameInput('');
+    setProfileFeedback('saved');
+    setTimeout(() => setProfileFeedback(null), 2000);
+  };
+  const handleLoadProfile = (profile) => {
+    loadProfile?.(profile);
+    setProfileFeedback('loaded');
+    setTimeout(() => setProfileFeedback(null), 2000);
+  };
+
+  // Özel domain listesi
+  const [domainInput, setDomainInput] = useState('');
+  const handleAddDomain = () => {
+    const val = domainInput.trim().toLowerCase();
+    if (!val) return;
+    const current = config.customDomains || [];
+    if (!current.includes(val)) {
+      updateConfig('customDomains', [...current, val]);
+    }
+    setDomainInput('');
+  };
+  const handleRemoveDomain = (domain) => {
+    const current = config.customDomains || [];
+    updateConfig('customDomains', current.filter(d => d !== domain));
+  };
 
   const lang = config.language || 'tr';
   const t = getTranslations(lang);
@@ -309,6 +341,73 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies 
                     <Toggle checked={config.requireConfirmation !== false} onChange={(v) => updateConfig('requireConfirmation', v)} />
                   </div>
 
+                </div>
+              </div>
+
+              {/* ========== AYARlar PROFİLLERİ ========== */}
+              <div className="v2-section">
+                <div className="v2-section-title">{t.sectionProfiles}</div>
+                <div className="v2-card" style={{ padding: '1rem' }}>
+                  <p style={{ fontSize: '0.75rem', color: '#71717a', marginBottom: '0.75rem', lineHeight: '1.5' }}>{t.sectionProfilesDesc}</p>
+
+                  {profileFeedback && (
+                    <div style={{ fontSize: '0.75rem', color: '#4ade80', marginBottom: '0.75rem', textAlign: 'center' }}>
+                      {profileFeedback === 'saved' ? t.profileSaved : t.profileLoaded}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '0.75rem' }}>
+                    <input
+                      type="text"
+                      value={profileNameInput}
+                      onChange={e => setProfileNameInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveProfile()}
+                      placeholder={t.profileName}
+                      style={{
+                        flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '8px', padding: '8px 12px', color: '#e2e8f0', fontSize: '0.8rem', outline: 'none',
+                      }}
+                    />
+                    <button
+                      onClick={handleSaveProfile}
+                      style={{
+                        background: 'rgba(96,165,250,0.2)', border: '1px solid rgba(96,165,250,0.3)',
+                        borderRadius: '8px', color: '#60a5fa', padding: '8px 14px', cursor: 'pointer',
+                        fontSize: '0.8rem', fontWeight: '600', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t.profileSave}
+                    </button>
+                  </div>
+
+                  {savedProfiles.length === 0 ? (
+                    <p style={{ fontSize: '0.75rem', color: '#52525b', textAlign: 'center', padding: '0.5rem 0' }}>{t.profileEmpty}</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {savedProfiles.map(profile => (
+                        <div key={profile.id} style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '8px 10px',
+                        }}>
+                          <span style={{ fontSize: '0.82rem', color: '#e2e8f0', fontWeight: '600', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.name}</span>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <button
+                              onClick={() => handleLoadProfile(profile)}
+                              style={{ background: 'rgba(74,222,128,0.15)', border: 'none', borderRadius: '6px', color: '#4ade80', padding: '3px 10px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: '600' }}
+                            >
+                              {t.profileLoad}
+                            </button>
+                            <button
+                              onClick={() => deleteProfile?.(profile.id)}
+                              style={{ background: 'rgba(239,68,68,0.12)', border: 'none', borderRadius: '6px', color: '#f87171', padding: '3px 8px', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >
+                              {t.profileDelete}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -721,6 +820,57 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies 
                     </div>
                     <Toggle checked={config.lanSharing || false} onChange={(v) => updateConfig('lanSharing', v)} />
                   </div>
+                </div>
+              </div>
+
+              {/* ========== ÖZEL DOMAIN LİSTESİ ========== */}
+              <div className="v2-section">
+                <div className="v2-section-title">{t.sectionDomains}</div>
+                <div className="v2-card" style={{ padding: '1rem' }}>
+                  <p style={{ fontSize: '0.75rem', color: '#71717a', marginBottom: '0.75rem', lineHeight: '1.5' }}>{t.sectionDomainsDesc}</p>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '0.75rem' }}>
+                    <input
+                      type="text"
+                      value={domainInput}
+                      onChange={e => setDomainInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleAddDomain()}
+                      placeholder={t.domainPlaceholder}
+                      style={{
+                        flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '8px', padding: '8px 12px', color: '#e2e8f0', fontSize: '0.8rem', outline: 'none',
+                      }}
+                    />
+                    <button
+                      onClick={handleAddDomain}
+                      style={{
+                        background: 'rgba(96,165,250,0.2)', border: '1px solid rgba(96,165,250,0.3)',
+                        borderRadius: '8px', color: '#60a5fa', padding: '8px 14px', cursor: 'pointer',
+                        fontSize: '0.8rem', fontWeight: '600', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t.domainAdd}
+                    </button>
+                  </div>
+                  {(config.customDomains || []).length === 0 ? (
+                    <p style={{ fontSize: '0.75rem', color: '#52525b', textAlign: 'center', padding: '0.5rem 0' }}>{t.domainEmpty}</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {(config.customDomains || []).map(domain => (
+                        <div key={domain} style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '6px 10px',
+                        }}>
+                          <span style={{ fontSize: '0.8rem', color: '#a1a1aa', fontFamily: 'monospace' }}>{domain}</span>
+                          <button
+                            onClick={() => handleRemoveDomain(domain)}
+                            style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

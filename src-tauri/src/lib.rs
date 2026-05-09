@@ -31,7 +31,7 @@ mod registry {
         key.get_value(name).ok()
     }
 
-    pub fn set_proxy(proxy_addr: &str, port: u16) -> Result<(), String> {
+    pub fn set_proxy(proxy_addr: &str, port: u16, extra_bypass: &[String]) -> Result<(), String> {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         let (key, _) = hkcu
             .create_subkey(INTERNET_SETTINGS)
@@ -41,7 +41,7 @@ mod registry {
             .map_err(|e| format!("ProxyServer: {}", e))?;
         key.set_value("ProxyEnable", &1u32)
             .map_err(|e| format!("ProxyEnable: {}", e))?;
-        let proxy_override = [
+        let mut base_bypass: Vec<&str> = vec![
             "<local>",
             "10.*",
             "172.16.*",
@@ -111,8 +111,10 @@ mod registry {
             "*.microsoft.com",
             // Genel CDN'ler (installer/updater dağıtımı)
             "*.cachefly.net",
-        ]
-        .join(";");
+        ];
+        let extra_refs: Vec<&str> = extra_bypass.iter().map(|s| s.as_str()).collect();
+        base_bypass.extend(extra_refs);
+        let proxy_override = base_bypass.join(";");
         key.set_value("ProxyOverride", &proxy_override)
             .map_err(|e| format!("ProxyOverride: {}", e))?;
         Ok(())
@@ -393,8 +395,21 @@ fn make_pac_direct_body() -> String {
 
 /// Production PAC: yerel ağ DIRECT, diğerleri PROXY ip:port; DIRECT (fail-safe)
 /// dnsResolve çağrıları try-catch ile korunuyor — DNS timeout olursa PAC script çökmez
-fn make_pac_body(lan_ip: &str, proxy_port: u16) -> String {
+fn make_pac_body(lan_ip: &str, proxy_port: u16, bypass_domains: &[String]) -> String {
     let proxy = format!("{}:{}", lan_ip, proxy_port);
+    let custom_block = if bypass_domains.is_empty() {
+        String::new()
+    } else {
+        let conditions: Vec<String> = bypass_domains.iter().map(|d| {
+            let d = d.trim();
+            if d.starts_with("*.") {
+                format!("        shExpMatch(host, \"{}\")", d)
+            } else {
+                format!("        host === \"{}\"", d)
+            }
+        }).collect();
+        format!("\n    if ({})\n        return \"DIRECT\";\n", conditions.join(" ||\n"))
+    };
     format!(
         r#"function FindProxyForURL(url, host) {{
     if (isPlainHostName(host) ||
@@ -426,7 +441,7 @@ fn make_pac_body(lan_ip: &str, proxy_port: u16) -> String {
         shExpMatch(host, "*.windowsupdate.com") ||
         shExpMatch(host, "*.delivery.mp.microsoft.com"))
         return "DIRECT";
-
+{}
     // NOT: Oyun/uygulama launcher bypass'ı burada YOK!
     // PAC server telefon/LAN cihazlarına hizmet eder — bu cihazlarda DPI engeli aktif,
     // bu yüzden oyun trafiği proxy üzerinden geçmeli.
@@ -434,6 +449,7 @@ fn make_pac_body(lan_ip: &str, proxy_port: u16) -> String {
 
     return "PROXY {}; DIRECT";
 }}"#,
+        custom_block,
         proxy
     )
 }
@@ -862,12 +878,13 @@ fn manage_firewall_rules(enable: bool, proxy_port: u16, pac_port: u16) {
 #[tauri::command]
 fn start_pac_server(
     proxy_port: u16,
+    bypass_domains: Vec<String>,
     state: tauri::State<'_, PacServerState>,
 ) -> Result<PacResponse, String> {
     let lan_ip = get_safe_lan_ip();
 
     // PAC body'yi güncelle — proxy moduna geç
-    let new_pac_body = make_pac_body(&lan_ip, proxy_port);
+    let new_pac_body = make_pac_body(&lan_ip, proxy_port, &bypass_domains);
     if let Ok(mut body) = state.pac_body.lock() {
         *body = new_pac_body;
     }
@@ -1151,7 +1168,7 @@ fn exempt_all_uwp_apps() {
 }
 
 #[tauri::command]
-fn set_system_proxy(port: u16, enable_winhttp: bool) -> Result<(), String> {
+fn set_system_proxy(port: u16, enable_winhttp: bool, custom_bypass_domains: Vec<String>) -> Result<(), String> {
     let _guard = acquire_proxy_lock(); // P0-FIX-3: Poisoned mutex recovery
     if port < 1024 {
         return Err("Geçersiz port numarası (1024-65535 arası olmalı)".to_string());
@@ -1176,7 +1193,7 @@ fn set_system_proxy(port: u16, enable_winhttp: bool) -> Result<(), String> {
         // UWP LoopbackExempt (Sanal İzolasyon Kaldırma) SADECE "127.0.0.1" için çalışır.
         let proxy_addr = "127.0.0.1".to_string();
 
-        registry::set_proxy(&proxy_addr, port).map_err(|e| {
+        registry::set_proxy(&proxy_addr, port, &custom_bypass_domains).map_err(|e| {
             let _ = registry::clear_proxy();
             format!("Registry güncelleme başarısız, geri alındı: {}", e)
         })?;
@@ -1345,6 +1362,59 @@ async fn check_dns_latency(dns_ip: String) -> Result<u32, String> {
     match std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(1500)) {
         Ok(_) => Ok(start.elapsed().as_millis() as u32),
         Err(_) => Ok(999),
+    }
+}
+
+/// ISS (İnternet Servis Sağlayıcı) adını ipconfig /all çıktısından tespit eder
+#[tauri::command]
+fn get_isp_name() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        if let Ok(output) = std::process::Command::new("ipconfig")
+            .arg("/all")
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            if text.contains("turk telekom") || text.contains("ttnet") || text.contains("türk telekom") {
+                return "turktelekom".to_string();
+            }
+            if text.contains("vodafone") {
+                return "vodafone".to_string();
+            }
+            if text.contains("kablonet") {
+                return "kablonet".to_string();
+            }
+            if text.contains("superonline") {
+                return "superonline".to_string();
+            }
+            if text.contains("milenicom") {
+                return "milenicom".to_string();
+            }
+            if text.contains("turknet") || text.contains("türknet") {
+                return "turknet".to_string();
+            }
+        }
+    }
+    "unknown".to_string()
+}
+
+/// Proxy port'una TCP bağlantı süresi ölçer (ms cinsinden ping)
+#[tauri::command]
+fn get_ping(host: String, port: u16) -> u32 {
+    if port < 1024 || host.is_empty() {
+        return 999;
+    }
+    let addr_str = format!("{}:{}", host, port);
+    let Ok(addr) = addr_str.parse::<std::net::SocketAddr>() else {
+        return 999;
+    };
+    let start = std::time::Instant::now();
+    match std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(2000)) {
+        Ok(_) => start.elapsed().as_millis() as u32,
+        Err(_) => 999,
     }
 }
 
@@ -1601,7 +1671,9 @@ pub fn run() {
             startup_proxy_cleanup,
             check_driver,
             install_driver,
-            quit_app
+            quit_app,
+            get_isp_name,
+            get_ping
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

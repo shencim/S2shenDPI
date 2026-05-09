@@ -52,6 +52,23 @@ function App() {
   const [copiedField, setCopiedField] = useState(null);
   const [showLargeQr, setShowLargeQr] = useState(false);
 
+  // Bağlantı istatistikleri
+  const [connectedAt, setConnectedAt] = useState(null);
+  const [uptimeDisplay, setUptimeDisplay] = useState("00:00:00");
+  const [pingMs, setPingMs] = useState(null);
+
+  // ISP tespiti
+  const [detectedIsp, setDetectedIsp] = useState(null);
+
+  // Güncelleme bildirimi
+  const [updateInfo, setUpdateInfo] = useState(null);
+
+  // Profil kaydetme
+  const [savedProfiles, setSavedProfiles] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('darknesdpi_saved_profiles') || '[]'); }
+    catch { return []; }
+  });
+
   const handleCopyField = async (text, fieldName) => {
     try {
       await writeText(text);
@@ -152,6 +169,7 @@ function App() {
       httpsChunkSize: 1,
       ipv4Only: true,
       selectedIspProfile: "heavy",
+      customDomains: [],
     };
 
     const saved = localStorage.getItem("darknesdpi_config");
@@ -215,6 +233,23 @@ function App() {
       localStorage.setItem("darknesdpi_config", JSON.stringify(newConfig));
       return newConfig;
     });
+  };
+
+  const saveProfile = (name) => {
+    const newProfile = { id: Date.now(), name: name.trim(), config: { ...config } };
+    const updated = [...savedProfiles, newProfile];
+    setSavedProfiles(updated);
+    localStorage.setItem('darknesdpi_saved_profiles', JSON.stringify(updated));
+  };
+
+  const loadProfile = (profile) => {
+    updateConfig(profile.config);
+  };
+
+  const deleteProfile = (id) => {
+    const updated = savedProfiles.filter(p => p.id !== id);
+    setSavedProfiles(updated);
+    localStorage.setItem('darknesdpi_saved_profiles', JSON.stringify(updated));
   };
 
   const confirmResolver = useRef(null);
@@ -727,7 +762,7 @@ function App() {
           setCurrentPort(port);
           currentPortRef.current = port;
           try {
-            await invoke("set_system_proxy", { port, enableWinhttp: configRef.current.enableWinhttp !== false });
+            await invoke("set_system_proxy", { port, enableWinhttp: configRef.current.enableWinhttp !== false, customBypassDomains: configRef.current.customDomains || [] });
             addLog(t.logProxySet(port), "success", {
               i18nKey: "logProxySet",
               i18nParams: [port],
@@ -754,7 +789,7 @@ function App() {
           if (configRef.current.lanSharing) {
             (async () => {
               try {
-                const pacResult = await invoke("start_pac_server", { proxyPort: port });
+                const pacResult = await invoke("start_pac_server", { proxyPort: port, bypassDomains: configRef.current.customDomains || [] });
                 if (pacResult?.pac_port) setPacPort(pacResult.pac_port);
                 addLog(t.logPacStarted, "success", {
                   i18nKey: "logPacStarted",
@@ -914,7 +949,7 @@ function App() {
           currentPortRef.current = port;
 
           try {
-            await invoke("set_system_proxy", { port: port, enableWinhttp: configRef.current.enableWinhttp !== false });
+            await invoke("set_system_proxy", { port: port, enableWinhttp: configRef.current.enableWinhttp !== false, customBypassDomains: configRef.current.customDomains || [] });
           } catch (err) {
             addLog(t.logProxySetError(err), "error", {
               i18nKey: "logProxySetError",
@@ -932,7 +967,7 @@ function App() {
           updateTrayTooltip("connected"); // ✅ Auto-connect başarılı
           if (configRef.current.lanSharing) {
             try {
-              const pacResult = await invoke("start_pac_server", { proxyPort: port });
+              const pacResult = await invoke("start_pac_server", { proxyPort: port, bypassDomains: configRef.current.customDomains || [] });
               if (pacResult?.pac_port) setPacPort(pacResult.pac_port);
               addLog(t.logPacStarted, "success", { i18nKey: "logPacStarted" });
             } catch (e) {
@@ -1142,6 +1177,61 @@ function App() {
     }, 2500); // Portun serbest kalması için (SpoofDPI 1.2.1 / TIME_WAIT)
   }, [config.dpiMethod, config.httpsChunkSize, config.selectedDns, config.dnsMode, config.enableWinhttp, config.ipv4Only, isConnected]);
 
+  // Bağlantı süre sayacı
+  useEffect(() => {
+    if (isConnected) {
+      setConnectedAt(Date.now());
+    } else {
+      setConnectedAt(null);
+      setUptimeDisplay("00:00:00");
+      setPingMs(null);
+    }
+  }, [isConnected]);
+
+  useEffect(() => {
+    if (!connectedAt) return;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - connectedAt;
+      const h = Math.floor(elapsed / 3600000);
+      const m = Math.floor((elapsed % 3600000) / 60000);
+      const s = Math.floor((elapsed % 60000) / 1000);
+      setUptimeDisplay(
+        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      );
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [connectedAt]);
+
+  // ISP tespiti → overlay'de otomatik profil seçimi
+  useEffect(() => {
+    if (!detectedIsp || !showFirstRunISS) return;
+    const ispProfileMap = {
+      turktelekom: 'heavy', vodafone: 'heavy', kablonet: 'heavy',
+      superonline: 'heavy', milenicom: 'heavy', turknet: 'light',
+    };
+    const profileId = ispProfileMap[detectedIsp];
+    if (profileId && config.selectedIspProfile !== profileId) {
+      const profile = ISP_PROFILES.find(p => p.id === profileId);
+      if (profile) {
+        updateConfig({ selectedIspProfile: profileId, dpiMethod: profile.mode, httpsChunkSize: profile.chunk });
+      }
+    }
+  }, [detectedIsp, showFirstRunISS]);
+
+  // Ping ölçümü (her 5 saniyede)
+  useEffect(() => {
+    if (!isConnected) return;
+    const measure = async () => {
+      try {
+        const ms = await invoke("get_ping", { host: "1.1.1.1", port: 80 });
+        setPingMs(ms >= 999 ? null : ms);
+      } catch (_) {}
+    };
+    measure();
+    const interval = setInterval(measure, 5000);
+    return () => clearInterval(interval);
+  }, [isConnected]);
+
   useEffect(() => {
     // Initial cleanup on mount
     (async () => {
@@ -1167,6 +1257,24 @@ function App() {
           setIsProcessing(true);
           startEngine(8080);
         }
+
+        // ISP tespiti
+        const isp = await invoke("get_isp_name").catch(() => "unknown");
+        if (isp && isp !== "unknown") {
+          setDetectedIsp(isp);
+        }
+
+        // Güncelleme kontrolü (GitHub API)
+        try {
+          const res = await fetch("https://api.github.com/repos/shencim/DarknesDPI/releases/latest");
+          if (res.ok) {
+            const data = await res.json();
+            const latestVer = data.tag_name?.replace('v', '');
+            if (latestVer && latestVer !== APP.version) {
+              setUpdateInfo({ version: latestVer, url: data.html_url });
+            }
+          }
+        } catch (_) {}
       } catch (e) {
         console.error("Initial cleanup failed:", e);
       }
@@ -1765,7 +1873,18 @@ function App() {
             <div style={{ zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "420px", width: "100%" }}>
               <img src="/darknesdpi-logo.png" alt="DarknesDPI" style={{ width: "56px", height: "56px", marginBottom: "1rem", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)" }} />
               <h1 style={{ fontSize: "1.25rem", marginBottom: "0.5rem", color: "#fff", fontWeight: "700" }}>{t.issOverlayTitle}</h1>
-              <p style={{ color: "#a1a1aa", marginBottom: "1.25rem", lineHeight: "1.5", fontSize: "0.85rem" }}>{t.issOverlayDesc}</p>
+              <p style={{ color: "#a1a1aa", marginBottom: detectedIsp ? "0.75rem" : "1.25rem", lineHeight: "1.5", fontSize: "0.85rem" }}>{t.issOverlayDesc}</p>
+              {detectedIsp && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  background: "rgba(34, 197, 94, 0.1)", border: "1px solid rgba(34, 197, 94, 0.3)",
+                  borderRadius: "12px", padding: "4px 12px", marginBottom: "1rem",
+                  fontSize: "0.75rem", color: "#4ade80", fontWeight: "600",
+                }}>
+                  <span>✓</span>
+                  <span>{t.ispAutoSelected}</span>
+                </div>
+              )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", marginBottom: "1.25rem" }}>
                 {ISP_PROFILES.map((isp) => {
@@ -1865,6 +1984,12 @@ function App() {
                 onClick={() => {
                   localStorage.setItem('darknesdpi_first_run_done', 'true');
                   setShowFirstRunISS(false);
+                  if (configRef.current.autoConnect && !isConnected && !isProcessing) {
+                    retryCount.current = 0;
+                    userIntentDisconnect.current = false;
+                    setIsProcessing(true);
+                    startEngine(8080);
+                  }
                 }}
                 style={{
                   background: "transparent",
@@ -2012,6 +2137,80 @@ function App() {
               )}
           </AnimatePresence>
         </div>
+
+        {/* Bağlantı İstatistikleri */}
+        <AnimatePresence>
+          {isConnected && (
+            <motion.div
+              initial={{ opacity: 0, y: -5, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto", marginTop: "10px" }}
+              exit={{ opacity: 0, y: -5, height: 0, marginTop: 0 }}
+              style={{ display: "flex", justifyContent: "center" }}
+            >
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "16px",
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                padding: "6px 16px",
+                borderRadius: "20px",
+                fontSize: "0.72rem",
+                color: "#a1a1aa",
+                fontWeight: "500",
+              }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span style={{ color: "#4ade80", fontWeight: "700" }}>⏱</span>
+                  <span style={{ color: "#e2e8f0" }}>{uptimeDisplay}</span>
+                </span>
+                {pingMs !== null && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ color: pingMs < 50 ? "#4ade80" : pingMs < 150 ? "#facc15" : "#f87171", fontWeight: "700" }}>◉</span>
+                    <span style={{ color: "#e2e8f0" }}>{pingMs}{t.statsMs}</span>
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Güncelleme Bildirimi */}
+        <AnimatePresence>
+          {updateInfo && (
+            <motion.div
+              initial={{ opacity: 0, y: -5, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto", marginTop: "10px" }}
+              exit={{ opacity: 0, y: -5, height: 0, marginTop: 0 }}
+              style={{ display: "flex", justifyContent: "center" }}
+            >
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "rgba(59, 130, 246, 0.1)",
+                border: "1px solid rgba(59, 130, 246, 0.3)",
+                padding: "5px 12px",
+                borderRadius: "20px",
+                fontSize: "0.72rem",
+                color: "#93c5fd",
+              }}>
+                <span>{t.updateAvailable(updateInfo.version)}</span>
+                <button
+                  onClick={() => openUrl(updateInfo.url)}
+                  style={{ background: "rgba(59,130,246,0.3)", border: "none", borderRadius: "10px", color: "#fff", padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer", fontWeight: "600" }}
+                >
+                  {t.updateDownload}
+                </button>
+                <button
+                  onClick={() => setUpdateInfo(null)}
+                  style={{ background: "transparent", border: "none", color: "#71717a", cursor: "pointer", padding: "0 2px", fontSize: "0.8rem", lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Action Button */}
@@ -2743,6 +2942,10 @@ function App() {
           updateConfig={updateConfig}
           dnsLatencies={dnsLatencies}
           setDnsLatencies={setDnsLatencies}
+          savedProfiles={savedProfiles}
+          saveProfile={saveProfile}
+          loadProfile={loadProfile}
+          deleteProfile={deleteProfile}
         />
       )}
     </div>

@@ -103,8 +103,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v1.0.0
-          releaseName: 'DarknesDPI v1.0.0'
+          tagName: v2.0.0
+          releaseName: 'DarknesDPI v2.0.0'
           releaseBody: 'Last Update'
           releaseDraft: false
           prerelease: false

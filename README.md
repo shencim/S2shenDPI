@@ -11,7 +11,7 @@
 <p align="center">
 
 [![DarknesDPI İndir](https://img.shields.io/badge/⬇%20İndir-DarknesDPI-107C10?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shencim/DarknesDPI/releases)
-[![Version v1.0.0](https://img.shields.io/badge/Version-1.0.0%20Latest-0078D4?style=for-the-badge&logo=github&logoColor=white)](https://github.com/shencim/DarknesDPI/releases)
+[![Version v2.0.0](https://img.shields.io/badge/Version-2.0.0%20Latest-0078D4?style=for-the-badge&logo=github&logoColor=white)](https://github.com/shencim/DarknesDPI/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue?style=for-the-badge)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
