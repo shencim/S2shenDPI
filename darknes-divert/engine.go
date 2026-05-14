@@ -268,26 +268,28 @@ func sendFakeWrongChksum(h syscall.Handle, pkt []byte, addr []byte) {
 }
 
 func sendFakeWrongSeq(h syscall.Handle, pkt []byte, addr []byte) {
-	fake := make([]byte, len(pkt))
-	copy(fake, pkt)
-	fakeAddr := make([]byte, WINDIVERT_ADDR_SIZE)
-	copy(fakeAddr, addr)
+	for i := 0; i < 3; i++ {
+		fake := make([]byte, len(pkt))
+		copy(fake, pkt)
+		fakeAddr := make([]byte, WINDIVERT_ADDR_SIZE)
+		copy(fakeAddr, addr)
 
-	ihl := ipv4HeaderLen(fake)
-	if len(fake) < ihl+12 {
-		return
+		ihl := ipv4HeaderLen(fake)
+		if len(fake) < ihl+12 {
+			return
+		}
+
+		seqOffset := ihl + 4
+		ackOffset := ihl + 8
+		origSeq := binary.BigEndian.Uint32(fake[seqOffset : seqOffset+4])
+		origAck := binary.BigEndian.Uint32(fake[ackOffset : ackOffset+4])
+		binary.BigEndian.PutUint32(fake[seqOffset:seqOffset+4], origSeq-uint32(10000*(i+1)))
+		binary.BigEndian.PutUint32(fake[ackOffset:ackOffset+4], origAck-uint32(66000*(i+1)))
+
+		applyFakeTTL(fake, addr)
+		divertCalcChecksums(fake, fakeAddr, 0)
+		_ = divertSend(h, fake, fakeAddr)
 	}
-
-	seqOffset := ihl + 4
-	ackOffset := ihl + 8
-	origSeq := binary.BigEndian.Uint32(fake[seqOffset : seqOffset+4])
-	origAck := binary.BigEndian.Uint32(fake[ackOffset : ackOffset+4])
-	binary.BigEndian.PutUint32(fake[seqOffset:seqOffset+4], origSeq-10000)
-	binary.BigEndian.PutUint32(fake[ackOffset:ackOffset+4], origAck-66000)
-
-	applyFakeTTL(fake, addr)
-	divertCalcChecksums(fake, fakeAddr, 0)
-	_ = divertSend(h, fake, fakeAddr)
 }
 
 func applyFakeTTL(pkt []byte, addr []byte) {

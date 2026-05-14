@@ -413,7 +413,7 @@ function App() {
     auto_ttl: true,
     block_quic: true,
     wrong_chksum: configRef.current.dpiMethod === '2',
-    wrong_seq: false,
+    wrong_seq: true,
     dns_redirect: configRef.current.selectedDns !== 'system',
     dns_addr: (() => {
       const { DNS_MAP: dm } = { DNS_MAP: { cloudflare: '1.1.1.1', google: '8.8.8.8', adguard: '94.140.14.14', quad9: '9.9.9.9', opendns: '208.67.222.222' } };
