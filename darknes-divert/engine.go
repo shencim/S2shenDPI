@@ -44,8 +44,7 @@ const (
 		" and tcp and (tcp.SrcPort == 443 or tcp.SrcPort == 80) and tcp.Syn and tcp.Ack"
 
 	filterDropRST = "inbound and " + filterNoLocal +
-		" and tcp and (tcp.SrcPort == 443 or tcp.SrcPort == 80) and tcp.Rst" +
-		" and (ip.Id >= 0x0 and ip.Id <= 0xF)"
+		" and tcp and (tcp.SrcPort == 443 or tcp.SrcPort == 80) and tcp.Rst"
 
 	filterQUIC = "outbound and " + filterNoLocal +
 		" and udp and udp.DstPort == 443 and udp.PayloadLength >= 1200 and udp.Payload[0] >= 0xC0"
@@ -298,24 +297,19 @@ func applyFakeTTL(pkt []byte, addr []byte) {
 	ttlTableMu.Unlock()
 
 	if !ok || entry.hopCount < 3 {
-		setPktTTL(pkt, 6)
+		setPktTTL(pkt, 3)
 		return
 	}
 
 	hop := entry.hopCount
 	var fakeTTL uint8
-	if hop > 9 {
-		if hop > 4 {
-			fakeTTL = hop - 4
-		} else {
-			fakeTTL = 1
-		}
+	if hop > 4 {
+		fakeTTL = hop - 4
 	} else {
-		if hop > 1 {
-			fakeTTL = hop - 1
-		} else {
-			fakeTTL = 1
-		}
+		fakeTTL = 1
+	}
+	if fakeTTL < 1 {
+		fakeTTL = 1
 	}
 	setPktTTL(pkt, fakeTTL)
 }
