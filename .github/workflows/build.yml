@@ -1,0 +1,162 @@
+name: DarknesDPI v4.0.0
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-divert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: Build darknes-divert for Windows
+        run: |
+          cd darknes-divert
+          rm -f go.sum
+          GONOSUMCHECK=* GONOSUMDB=* GOFLAGS=-mod=mod go mod tidy
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../darknes-divert.exe .
+          echo "Build OK"
+          ls -lh ../darknes-divert.exe
+
+      - name: Upload divert binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: darknes-divert
+          path: darknes-divert.exe
+          retention-days: 1
+
+  build-proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: Cross-compile SpoofDPI v1.2.1 for Windows
+        run: |
+          curl -L "https://github.com/xvzc/SpoofDPI/archive/refs/tags/v1.2.1.tar.gz" -o spoofdpi.tar.gz
+          tar xzf spoofdpi.tar.gz
+          SPOOFDIR=$(find . -maxdepth 1 -type d | grep -i spoof | head -1)
+          echo "Klasör: $SPOOFDIR"
+          cp scripts/patch-spoofdpi.sh "$SPOOFDIR/"
+          cd "$SPOOFDIR"
+          bash patch-spoofdpi.sh
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../darknes-proxy.exe ./cmd/spoofdpi
+          echo "Build OK"
+          ls -lh ../darknes-proxy.exe
+
+      - name: Upload proxy binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: darknes-proxy
+          path: darknes-proxy.exe
+          retention-days: 1
+
+  build-tauri:
+    needs: [build-proxy, build-divert]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Download proxy binary
+        uses: actions/download-artifact@v8
+        with:
+          name: darknes-proxy
+          path: spoofdpi/
+
+      - name: Download divert binary
+        uses: actions/download-artifact@v8
+        with:
+          name: darknes-divert
+          path: divert/
+
+      - name: Copy binaries to tauri binaries
+        shell: bash
+        run: |
+          mkdir -p src-tauri/binaries
+          cp spoofdpi/darknes-proxy.exe src-tauri/binaries/darknes-proxy.exe
+          cp spoofdpi/darknes-proxy.exe "src-tauri/binaries/darknes-proxy-x86_64-pc-windows-msvc.exe"
+          cp divert/darknes-divert.exe src-tauri/binaries/darknes-divert.exe
+          cp divert/darknes-divert.exe "src-tauri/binaries/darknes-divert-x86_64-pc-windows-msvc.exe"
+          ls -lh src-tauri/binaries/
+
+      - name: Update proxy icon
+        shell: bash
+        run: node change-icon.js || echo "Icon update skipped"
+
+      - name: Download Npcap installer
+        shell: bash
+        run: |
+          curl -L --retry 3 --max-time 120 \
+            "https://npcap.com/dist/npcap-1.79.exe" \
+            -o "src-tauri/binaries/npcap-installer.exe" \
+            --user-agent "Mozilla/5.0"
+          ls -lh src-tauri/binaries/npcap-installer.exe
+
+      - name: Download WinDivert
+        shell: bash
+        run: |
+          curl -L --retry 3 --max-time 120 \
+            "https://github.com/basil00/WinDivert/releases/download/v2.2.0/WinDivert-2.2.0-A.zip" \
+            -o windivert.zip
+          unzip -o windivert.zip
+          cp WinDivert-2.2.0-A/x64/WinDivert.dll src-tauri/binaries/WinDivert.dll
+          cp WinDivert-2.2.0-A/x64/WinDivert64.sys src-tauri/binaries/WinDivert64.sys
+          ls -lh src-tauri/binaries/WinDivert.dll src-tauri/binaries/WinDivert64.sys
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v4.0.0
+          releaseName: 'DarknesDPI v4.0.0'
+          releaseBody: 'Last Update'
+          releaseDraft: false
+          prerelease: false
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: DarknesDPI-Windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 7
