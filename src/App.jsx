@@ -424,20 +424,27 @@ function App() {
   });
 
   // Discord Split: sabit, tek amaçlı yapılandırma — mod/chunk/DoH seçeneği yok.
-  // auto_ttl/wrong_chksum/wrong_seq/block_quic kasıtlı olarak kapalı: bunlar
-  // Go tarafında SNI ile hedeflenemiyor (sistem genelinde tüm 443/80 trafiğini
-  // etkiler), "yalnızca Discord'a dokun" ilkesini bozmamak için devre dışı.
+  // wrong_chksum/wrong_seq (sahte ClientHello enjeksiyonu) yalnızca SNI eşleşen
+  // bağlantılarda tetiklenir — Discord dışı trafiğe kesinlikle dokunulmaz.
+  // auto_ttl İSTİSNA: Go motorunda TTL ayarı, SNI kontrolünden ÖNCE her
+  // TCP:443/80 paketine (hangi siteye ait olursa olsun) uygulanıyor — yani bu
+  // tek ayar sistem geneli TTL'yi (tek byte, checksum yeniden hesaplanır,
+  // ölçülebilir performans etkisi yok) etkiliyor. Salt fragmentation, TCP
+  // segmentlerini birleştirip SNI'yi gören modern/güncel DPI'ları artık
+  // atlatamıyor — auto_ttl'nin sağladığı "sahte paket DPI'da ölür, gerçek
+  // paket hedefe ulaşır" tekniği olmadan bypass etkisiz kalıyordu, bu yüzden
+  // etkinleştirildi.
   const buildDiscordSplitConfig = () => ({
     mode: 'discord',
-    auto_ttl: false,
+    auto_ttl: true,
     block_quic: false,
-    wrong_chksum: false,
-    wrong_seq: false,
+    wrong_chksum: true,
+    wrong_seq: true,
     dns_redirect: false,
     dns_addr: '1.1.1.1',
     proxy_port: 0,
     chunk_size: 2,
-    dpi_tier: '1',
+    dpi_tier: '2',
     sni_filter: true,
   });
 

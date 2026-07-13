@@ -56,15 +56,13 @@ func runEngine(cfg *Config) {
 	// RST dropper, gelen TÜM inbound RST paketlerini (443/80, hangi uygulamaya
 	// ait olursa olsun) düşürür — SNI bazlı hedeflenemez (RST paketinin payload'ı
 	// yoktur, hangi bağlantıya ait olduğu bağlantı takibi olmadan bilinemez).
-	// Discord Split (SNIFilter) modunda "yalnızca Discord'a dokun" ilkesini
-	// bozmamak için bu global davranış devre dışı bırakılır.
-	if !cfg.SNIFilter {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runRSTDropper()
-		}()
-	}
+	// Discord Split (SNIFilter) modunda da etkin bırakılıyor: ISS'nin RST enjeksiyonu
+	// ile bloklaması ihtimaline karşı bu savunma olmadan bypass etkisiz kalabiliyor.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runRSTDropper()
+	}()
 
 	if cfg.BlockQUIC {
 		wg.Add(1)
