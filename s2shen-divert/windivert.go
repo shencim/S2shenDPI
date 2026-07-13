@@ -60,22 +60,29 @@ func loadWinDivert() error {
 		return fmt.Errorf("WinDivert.dll bulunamadı: %w", err)
 	}
 
-	mustProc := func(name string) *syscall.Proc {
+	var missing []string
+	findProc := func(name string) *syscall.Proc {
 		p, e := dll.FindProc(name)
 		if e != nil {
-			panic(fmt.Sprintf("%s bulunamadı: %v", name, e))
+			missing = append(missing, name)
+			return nil
 		}
 		return p
 	}
 
-	wd = &WinDivert{
-		open:     mustProc("WinDivertOpen"),
-		recv:     mustProc("WinDivertRecv"),
-		send:     mustProc("WinDivertSend"),
-		close:    mustProc("WinDivertClose"),
-		parse:    mustProc("WinDivertHelperParsePacket"),
-		checksum: mustProc("WinDivertHelperCalcChecksums"),
+	candidate := &WinDivert{
+		open:     findProc("WinDivertOpen"),
+		recv:     findProc("WinDivertRecv"),
+		send:     findProc("WinDivertSend"),
+		close:    findProc("WinDivertClose"),
+		parse:    findProc("WinDivertHelperParsePacket"),
+		checksum: findProc("WinDivertHelperCalcChecksums"),
 	}
+	if len(missing) > 0 {
+		return fmt.Errorf("WinDivert.dll uyumsuz veya bozuk, eksik export'lar: %v (sürüm 2.2.0 gereklidir)", missing)
+	}
+
+	wd = candidate
 	return nil
 }
 

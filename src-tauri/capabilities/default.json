@@ -22,7 +22,7 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "binaries/darknes-proxy",
+          "name": "binaries/s2shen-proxy",
           "sidecar": true,
           "args": true
         }
@@ -33,7 +33,7 @@
       "identifier": "shell:allow-kill",
       "allow": [
         {
-          "name": "binaries/darknes-proxy",
+          "name": "binaries/s2shen-proxy",
           "sidecar": true,
           "args": true
         }
@@ -57,7 +57,7 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         { "url": "https://discord.gg/**" },
-        { "url": "https://darknes.com.tr/**" },
+        { "url": "https://s2shen.com.tr/**" },
         { "url": "https://github.com/shencim/**" },
         { "url": "https://youtube.com/**" }
       ]

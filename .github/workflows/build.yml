@@ -1,4 +1,4 @@
-name: DarknesDPI v4.0.0
+name: S2shenDPI v4.0.0
 
 on:
   push:
@@ -21,20 +21,20 @@ jobs:
           go-version: '1.24'
           cache: false
 
-      - name: Build darknes-divert for Windows
+      - name: Build s2shen-divert for Windows
         run: |
-          cd darknes-divert
+          cd s2shen-divert
           rm -f go.sum
           GONOSUMCHECK=* GONOSUMDB=* GOFLAGS=-mod=mod go mod tidy
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../darknes-divert.exe .
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../s2shen-divert.exe .
           echo "Build OK"
-          ls -lh ../darknes-divert.exe
+          ls -lh ../s2shen-divert.exe
 
       - name: Upload divert binary
         uses: actions/upload-artifact@v7
         with:
-          name: darknes-divert
-          path: darknes-divert.exe
+          name: s2shen-divert
+          path: s2shen-divert.exe
           retention-days: 1
 
   build-proxy:
@@ -58,15 +58,15 @@ jobs:
           cp scripts/patch-spoofdpi.sh "$SPOOFDIR/"
           cd "$SPOOFDIR"
           bash patch-spoofdpi.sh
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../darknes-proxy.exe ./cmd/spoofdpi
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../s2shen-proxy.exe ./cmd/spoofdpi
           echo "Build OK"
-          ls -lh ../darknes-proxy.exe
+          ls -lh ../s2shen-proxy.exe
 
       - name: Upload proxy binary
         uses: actions/upload-artifact@v7
         with:
-          name: darknes-proxy
-          path: darknes-proxy.exe
+          name: s2shen-proxy
+          path: s2shen-proxy.exe
           retention-days: 1
 
   build-tauri:
@@ -98,23 +98,23 @@ jobs:
       - name: Download proxy binary
         uses: actions/download-artifact@v8
         with:
-          name: darknes-proxy
+          name: s2shen-proxy
           path: spoofdpi/
 
       - name: Download divert binary
         uses: actions/download-artifact@v8
         with:
-          name: darknes-divert
+          name: s2shen-divert
           path: divert/
 
       - name: Copy binaries to tauri binaries
         shell: bash
         run: |
           mkdir -p src-tauri/binaries
-          cp spoofdpi/darknes-proxy.exe src-tauri/binaries/darknes-proxy.exe
-          cp spoofdpi/darknes-proxy.exe "src-tauri/binaries/darknes-proxy-x86_64-pc-windows-msvc.exe"
-          cp divert/darknes-divert.exe src-tauri/binaries/darknes-divert.exe
-          cp divert/darknes-divert.exe "src-tauri/binaries/darknes-divert-x86_64-pc-windows-msvc.exe"
+          cp spoofdpi/s2shen-proxy.exe src-tauri/binaries/s2shen-proxy.exe
+          cp spoofdpi/s2shen-proxy.exe "src-tauri/binaries/s2shen-proxy-x86_64-pc-windows-msvc.exe"
+          cp divert/s2shen-divert.exe src-tauri/binaries/s2shen-divert.exe
+          cp divert/s2shen-divert.exe "src-tauri/binaries/s2shen-divert-x86_64-pc-windows-msvc.exe"
           ls -lh src-tauri/binaries/
 
       - name: Update proxy icon
@@ -147,7 +147,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v4.0.0
-          releaseName: 'DarknesDPI v4.0.0'
+          releaseName: 'S2shenDPI v4.0.0'
           releaseBody: 'Last Update'
           releaseDraft: false
           prerelease: false
@@ -155,7 +155,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: DarknesDPI-Windows
+          name: S2shenDPI-Windows
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi

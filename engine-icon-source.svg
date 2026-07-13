@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="outerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="70%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sBack" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#880000"/>
+      <stop offset="100%" stop-color="#cc0000"/>
+    </linearGradient>
+    <linearGradient id="sFront" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff8a7a"/>
+      <stop offset="100%" stop-color="#f45a4a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dış yumuşak beyaz parlama -->
+  <circle cx="512" cy="512" r="512" fill="url(#outerGlow)"/>
+
+  <!-- Kırmızı dış halka -->
+  <circle cx="512" cy="512" r="472" fill="none" stroke="#cc0000" stroke-width="10"/>
+
+  <!-- Siyah ana gövde -->
+  <circle cx="512" cy="512" r="462" fill="#0d0605"/>
+
+  <!-- İç ince dekoratif halka -->
+  <circle cx="512" cy="512" r="392" fill="none" stroke="#5a2020" stroke-width="2" opacity="0.6"/>
+
+  <!-- Kadran çizgileri (12 adet, saat gibi) -->
+  <g stroke="#cc0000" stroke-width="6" opacity="0.85">
+    <line x1="512" y1="60"  x2="512" y2="100"/>
+    <line x1="512" y1="924" x2="512" y2="964"/>
+    <line x1="60"  y1="512" x2="100" y2="512"/>
+    <line x1="924" y1="512" x2="964" y2="512"/>
+    <line x1="196" y1="196" x2="225" y2="225"/>
+    <line x1="799" y1="196" x2="828" y2="225"/>
+    <line x1="196" y1="828" x2="225" y2="799"/>
+    <line x1="799" y1="828" x2="828" y2="799"/>
+  </g>
+
+  <!-- S harfi - arka (koyu) katman, hafif ofsetli (bevel derinliği) -->
+  <text
+    x="524"
+    y="700"
+    font-family="'Arial Black', 'Impact', sans-serif"
+    font-size="620"
+    font-weight="900"
+    fill="url(#sBack)"
+    text-anchor="middle"
+  >S</text>
+
+  <!-- S harfi - ön (açık) katman -->
+  <text
+    x="512"
+    y="688"
+    font-family="'Arial Black', 'Impact', sans-serif"
+    font-size="620"
+    font-weight="900"
+    fill="url(#sFront)"
+    text-anchor="middle"
+    stroke="#ffd9d0"
+    stroke-width="2"
+    stroke-opacity="0.5"
+  >S</text>
+</svg>

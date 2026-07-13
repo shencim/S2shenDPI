@@ -1,20 +1,20 @@
-# Sadece mevcut darknes-proxy.exe'i src-tauri\binaries'e kopyala
+# Sadece mevcut s2shen-proxy.exe'i src-tauri\binaries'e kopyala
 # Kullanım: PowerShell'de .\scripts\copy-proxy.ps1
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $ScriptDir
-$SrcExe = Join-Path $Root "spoofdpi\darknes-proxy.exe"
+$SrcExe = Join-Path $Root "spoofdpi\s2shen-proxy.exe"
 $BinariesDir = Join-Path $Root "src-tauri\binaries"
 
 if (-not (Test-Path $SrcExe)) {
-    Write-Host "HATA: spoofdpi\darknes-proxy.exe bulunamadi. Once build-proxy.ps1 calistirin." -ForegroundColor Red
+    Write-Host "HATA: spoofdpi\s2shen-proxy.exe bulunamadi. Once build-proxy.ps1 calistirin." -ForegroundColor Red
     exit 1
 }
 
 if (-not (Test-Path $BinariesDir)) {
     New-Item -ItemType Directory -Path $BinariesDir -Force | Out-Null
 }
-Copy-Item -Path $SrcExe -Destination (Join-Path $BinariesDir "darknes-proxy.exe") -Force
-Copy-Item -Path $SrcExe -Destination (Join-Path $BinariesDir "darknes-proxy-x86_64-pc-windows-msvc.exe") -Force
+Copy-Item -Path $SrcExe -Destination (Join-Path $BinariesDir "s2shen-proxy.exe") -Force
+Copy-Item -Path $SrcExe -Destination (Join-Path $BinariesDir "s2shen-proxy-x86_64-pc-windows-msvc.exe") -Force
 Write-Host "Kopyalandi: src-tauri\binaries\" -ForegroundColor Green

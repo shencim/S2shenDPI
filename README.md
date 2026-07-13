@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="images/darknesdpi-logo.png" width="128" alt="DarknesDPI Logo">
+  <img src="images/s2shendpi-logo.png" width="128" alt="S2shenDPI Logo">
 </p>
 
-<h1 align="center">DarknesDPI</h1>
+<h1 align="center">S2shenDPI</h1>
 
 <p align="center">
   <b>Discord ve internet erişim engellerini aşmak için tasarlanmış; çökmeye karşı dayanıklı, modern ve çok yönlü Yerel Proxy & DPI Bypass aracı.</b>
@@ -10,8 +10,8 @@
 
 <p align="center">
 
-[![DarknesDPI İndir](https://img.shields.io/badge/⬇%20İndir-DarknesDPI-107C10?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shencim/DarknesDPI/releases)
-[![Version v3.0.0](https://img.shields.io/badge/Version-3.0.0%20Latest-0078D4?style=for-the-badge&logo=github&logoColor=white)](https://github.com/shencim/DarknesDPI/releases)
+[![S2shenDPI İndir](https://img.shields.io/badge/⬇%20İndir-S2shenDPI-107C10?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shencim/S2shenDPI/releases)
+[![Version v3.0.0](https://img.shields.io/badge/Version-3.0.0%20Latest-0078D4?style=for-the-badge&logo=github&logoColor=white)](https://github.com/shencim/S2shenDPI/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue?style=for-the-badge)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
@@ -22,15 +22,15 @@
 ## 📸 Ekran Görüntüleri
 
 <div align="center">
-  <img src="images/1.png" alt="DarknesDPI Ekran Görüntüsü 1" width="35%">
-  <img src="images/2.png" alt="DarknesDPI Ekran Görüntüsü 2" width="35%">
+  <img src="images/1.png" alt="S2shenDPI Ekran Görüntüsü 1" width="35%">
+  <img src="images/2.png" alt="S2shenDPI Ekran Görüntüsü 2" width="35%">
 </div>
 
 ---
 
 ## 📋 İçindekiler
 
-- [Neden DarknesDPI?](#-neden-darknesdpi)
+- [Neden S2shenDPI?](#-neden-s2shendpi)
 - [Özellikler](#-özellikler)
 - [3 Kademeli DPI Bypass Motoru](#-3-kademeli-dpi-bypass-motoru)
 - [Güvenlik](#-güvenlik)
@@ -41,11 +41,11 @@
 
 ---
 
-## 💡 Neden DarknesDPI?
+## 💡 Neden S2shenDPI?
 
 Piyasadaki diğer CMD/Java tabanlı araçların (GoodbyeDPI, GreenTunnel vb.) en büyük sorunu; **BSOD veya ani kapanma durumlarında sistem proxy ayarlarını havada bırakarak interneti kesmesidir.**
 
-DarknesDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup **Sentinel Recovery**, **Zombi Process Temizleme** ve **Kurumsal Proxy Yedekleme** (Backup & Restore) sistemleriyle donatılmıştır. Bağlantı ne şekilde koparsa kopsun, internet ayarlarınız otomatik olarak eski haline döner.
+S2shenDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup **Sentinel Recovery**, **Zombi Process Temizleme** ve **Kurumsal Proxy Yedekleme** (Backup & Restore) sistemleriyle donatılmıştır. Bağlantı ne şekilde koparsa kopsun, internet ayarlarınız otomatik olarak eski haline döner.
 
 ---
 
@@ -66,7 +66,7 @@ DarknesDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup
   </tr>
 </table>
 
-- **DoH (DNS over HTTPS)** — ISP'lerin Port 53 DNS sorgularını izlemesini önlemek için Cloudflare, Google, AdGuard, Quad9 ve OpenDNS üzerinden şifreli DNS.
+- **DoH (DNS over HTTPS)** — ISP'lerin Port 53 DNS sorgularını izlemesini önlemek için Cloudflare, Google, AdGuard, Quad9 ve OpenDNS üzerinden şifreli DNS (yerel proxy motoru üzerinden uygulanır). Oyun Modu/Süper Mod'daki (WinDivert) DNS yönlendirmesi ise düz DNS sunucu değişikliğidir, şifreli değildir.
 - **Canlı Soft-Restart** — DNS veya ayar değişikliklerinde uygulamayı yeniden başlatmanıza gerek yoktur; bağlantı otomatik olarak yeni ayarlara geçiş yapar.
 - **Modern Arayüz** — Windows 11 uyumlu React/Vite arayüzü, canlı log monitörü ve Türkçe/İngilizce dil desteği.
 - **Sistem Tepsisi** — Tek instance mimarisiyle arka planda sessizce çalışır.
@@ -81,14 +81,14 @@ DarknesDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup
 | **1** | **Dengeli** | TLS paketlerini Chunk Split yöntemiyle böler. Çoğu ISP'de çalışır. |
 | **2** | **Güçlü** | Paket parçalama + sıra bozma (Disorder). En katı engellerde tercih edilir. |
 
-> Gelişmiş ayarlardan 4 / 8 / 16 baytlık Chunk Size ince ayarı yapılabilir.
+> Gelişmiş ayarlardan 1 / 2 / 4 / 8 baytlık Chunk Size ince ayarı yapılabilir. Bu 3 kademe hem yerel proxy motorunu (tarayıcı/uygulama trafiği) hem de Oyun Modu/Süper Mod'daki WinDivert motorunu (proxy'yi görmezden gelen oyun/uygulama trafiği) aynı şekilde etkiler.
 
 ---
 
 ## 🛡️ Güvenlik
 
 1. **Sentinel Recovery** — Ani kapanma/BSOD durumunda uygulama, bir sonraki açılışta proxy kirliliğini tespit ederek otomatik temizler.
-2. **Proxy Backup & Restore** — Kurumsal/şirket proxy ayarları varsa, DarknesDPI bunları kapatılırken otomatik geri yükler.
+2. **Proxy Backup & Restore** — Kurumsal/şirket proxy ayarları varsa, S2shenDPI bunları kapatılırken otomatik geri yükler.
 3. **Rust Native WinAPI** — Registry ve yönetici işlemleri, CMD/PowerShell yerine Rust'ın native WinAPI entegrasyonuyla yürütülür.
 4. **Thread-Rate Limitli PAC Sunucusu** — Aynı ağdaki yabancı cihazların PAC portuna aşırı bağlantı açmasını önleyen asenkron bağlantı limiti.
 5. **Strict CSP + Tauri İzolasyonu** — Arayüzden gelebilecek zararlı kod ihtimalleri sıkı CSP politikası ve Tauri'nin izole shell yetkisiyle engellenir.
@@ -108,7 +108,7 @@ DarknesDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup
 
 ## 🔧 Kurulum
 
-1. **İndirin** — [Releases sayfasından](https://github.com/shencim/DarknesDPI/releases) en güncel `.exe` veya `.msi` dosyasını indirin.
+1. **İndirin** — [Releases sayfasından](https://github.com/shencim/S2shenDPI/releases) en güncel `.exe` veya `.msi` dosyasını indirin.
 2. **Kurun** — Kurulum sihirbazını çalıştırın. Ek sürücü veya program gerekmez.
 3. **Başlatın** — Uygulamayı **yönetici olarak** çalıştırın, istediğiniz modu seçin ve **BAĞLAN** tuşuna basın.
 
@@ -118,7 +118,7 @@ DarknesDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup
 
 **Shencim** — Crafted with Rust & React
 
-- **Discord:** [discord.gg/darknes](https://discord.gg/darknes)
+- **Discord:** [discord.gg/s2shen](https://discord.gg/s2shen)
 - **GitHub:** [github.com/shencim](https://github.com/shencim)
 
 ---
@@ -126,19 +126,19 @@ DarknesDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup
 ## 🔒 Gizlilik
 
 > [!IMPORTANT]
-> DarknesDPI **hiçbir telemetri veya veri toplama yapısı barındırmaz.**
+> S2shenDPI **hiçbir telemetri veya veri toplama yapısı barındırmaz.**
 > IP adresiniz, ziyaret ettiğiniz siteler ve sistem bilgileriniz hiçbir sunucuya gönderilmez. Uygulama logları yalnızca RAM'de tutulur ve program kapandığında silinir.
 
 ---
 
 ## ⚖️ Sorumluluk Reddi
 
-- DarknesDPI yalnızca yerel makinenizde HTTPS trafiğinin TLS paketlerini (SNI katmanı) böler (Packet Fragmentation). Uzak bir VPN sunucusuyla veri alışverişi yapmaz.
+- S2shenDPI yalnızca yerel makinenizde HTTPS trafiğinin TLS paketlerini (SNI katmanı) böler (Packet Fragmentation). Uzak bir VPN sunucusuyla veri alışverişi yapmaz.
 - Yazılım kişisel kullanıma açık ve ücretsizdir. Ticari, yasadışı veya manipülatif amaçlı kullanılamaz. Kullanımdan doğacak tüm teknik ve yasal sorumluluk kullanıcıya aittir.
 
 <br>
 <div align="center">
-  <strong>DarknesDPI ile kesintisiz ve özgür internete hoş geldiniz.</strong>
+  <strong>S2shenDPI ile kesintisiz ve özgür internete hoş geldiniz.</strong>
 </div>
 
 ---
@@ -160,9 +160,9 @@ DarknesDPI, baştan aşağı **Rust (Tauri v2)** altyapısıyla kodlanmış olup
 ### Güvenilirlik
 
 - **Sentinel Recovery** — Ani kapanma veya BSOD sonrasında bir sonraki açılışta kirli proxy durumu otomatik tespit edilerek temizleniyor.
-- **Zombie Process Cleanup** — Önceki oturumdan kalan `darknes-proxy.exe` süreçleri PID dosyasından takip edilerek sonlandırılıyor.
+- **Zombie Process Cleanup** — Önceki oturumdan kalan `s2shen-proxy.exe` süreçleri PID dosyasından takip edilerek sonlandırılıyor.
 - **Kurumsal Proxy Yedekleme** — Bağlantı kurulmadan önce mevcut sistem proxy ayarları yedekleniyor, uygulama kapanırken geri yükleniyor.
 
 ### Sonuç
 
-DarknesDPI, kategorisindeki araçlar arasında güvenlik mimarisi en olgun olanlardan biri. Registry ve sistem işlemlerinin native Rust ile yönetilmesi, izole Tauri shell mimarisi ve çoklu kurtarma mekanizmaları ile günlük kullanım için güvenilir bir araç olarak değerlendirilmiştir.
+S2shenDPI, kategorisindeki araçlar arasında güvenlik mimarisi en olgun olanlardan biri. Registry ve sistem işlemlerinin native Rust ile yönetilmesi, izole Tauri shell mimarisi ve çoklu kurtarma mekanizmaları ile günlük kullanım için güvenilir bir araç olarak değerlendirilmiştir.

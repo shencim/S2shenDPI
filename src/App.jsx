@@ -65,7 +65,7 @@ function App() {
 
   // Profil kaydetme
   const [savedProfiles, setSavedProfiles] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('darknesdpi_saved_profiles') || '[]'); }
+    try { return JSON.parse(localStorage.getItem('s2shendpi_saved_profiles') || '[]'); }
     catch { return []; }
   });
 
@@ -153,7 +153,7 @@ function App() {
   }, []);
 
   const [showFirstRunISS, setShowFirstRunISS] = useState(() => {
-    return !localStorage.getItem('darknesdpi_first_run_done');
+    return !localStorage.getItem('s2shendpi_first_run_done');
   });
 
   const [config, setConfig] = useState(() => {
@@ -174,7 +174,7 @@ function App() {
       advancedBypass: false,
     };
 
-    const saved = localStorage.getItem("darknesdpi_config");
+    const saved = localStorage.getItem("s2shendpi_config");
     if (saved) {
       try {
         let parsedStr = saved;
@@ -190,7 +190,7 @@ function App() {
           dpiMethod: ['0', '1', '2'].includes(String(parsed.dpiMethod)) ? String(parsed.dpiMethod) : defaultSettings.dpiMethod,
           httpsChunkSize: [1, 2, 4, 8, 16, 32, 64, 128].includes(Number(parsed.httpsChunkSize)) ? Number(parsed.httpsChunkSize) : defaultSettings.httpsChunkSize,
           selectedDns: typeof parsed.selectedDns === 'string' ? parsed.selectedDns : defaultSettings.selectedDns,
-          networkMode: ['smooth', 'game', 'super'].includes(parsed.networkMode) ? parsed.networkMode : defaultSettings.networkMode,
+          networkMode: ['smooth', 'game', 'super', 'discordSplit'].includes(parsed.networkMode) ? parsed.networkMode : defaultSettings.networkMode,
         };
       } catch (e) {
         console.error("Failed to parse config:", e);
@@ -234,7 +234,7 @@ function App() {
       } else {
         newConfig = { ...prev, [keyOrObj]: value };
       }
-      localStorage.setItem("darknesdpi_config", JSON.stringify(newConfig));
+      localStorage.setItem("s2shendpi_config", JSON.stringify(newConfig));
       return newConfig;
     });
   };
@@ -243,7 +243,7 @@ function App() {
     const newProfile = { id: Date.now(), name: name.trim(), config: { ...config } };
     const updated = [...savedProfiles, newProfile];
     setSavedProfiles(updated);
-    localStorage.setItem('darknesdpi_saved_profiles', JSON.stringify(updated));
+    localStorage.setItem('s2shendpi_saved_profiles', JSON.stringify(updated));
   };
 
   const loadProfile = (profile) => {
@@ -253,7 +253,7 @@ function App() {
   const deleteProfile = (id) => {
     const updated = savedProfiles.filter(p => p.id !== id);
     setSavedProfiles(updated);
-    localStorage.setItem('darknesdpi_saved_profiles', JSON.stringify(updated));
+    localStorage.setItem('s2shendpi_saved_profiles', JSON.stringify(updated));
   };
 
   const confirmResolver = useRef(null);
@@ -413,14 +413,87 @@ function App() {
     auto_ttl: true,
     block_quic: true,
     wrong_chksum: configRef.current.dpiMethod === '2',
-    wrong_seq: true,
+    wrong_seq: configRef.current.dpiMethod === '2',
     dns_redirect: configRef.current.selectedDns !== 'system',
-    dns_addr: (() => {
-      const { DNS_MAP: dm } = { DNS_MAP: { cloudflare: '1.1.1.1', google: '8.8.8.8', adguard: '94.140.14.14', quad9: '9.9.9.9', opendns: '208.67.222.222' } };
-      return dm[configRef.current.selectedDns] || '1.1.1.1';
-    })(),
+    dns_addr: DNS_MAP[configRef.current.selectedDns] || '1.1.1.1',
     proxy_port: proxyPort,
+    chunk_size: [1, 2, 4, 8, 16].includes(Number(configRef.current.httpsChunkSize))
+      ? Number(configRef.current.httpsChunkSize)
+      : 2,
+    dpi_tier: configRef.current.dpiMethod || '1',
   });
+
+  // Discord Split: sabit, tek amaçlı yapılandırma — mod/chunk/DoH seçeneği yok.
+  // auto_ttl/wrong_chksum/wrong_seq/block_quic kasıtlı olarak kapalı: bunlar
+  // Go tarafında SNI ile hedeflenemiyor (sistem genelinde tüm 443/80 trafiğini
+  // etkiler), "yalnızca Discord'a dokun" ilkesini bozmamak için devre dışı.
+  const buildDiscordSplitConfig = () => ({
+    mode: 'discord',
+    auto_ttl: false,
+    block_quic: false,
+    wrong_chksum: false,
+    wrong_seq: false,
+    dns_redirect: false,
+    dns_addr: '1.1.1.1',
+    proxy_port: 0,
+    chunk_size: 2,
+    dpi_tier: '1',
+    sni_filter: true,
+  });
+
+  const startDiscordSplitEngine = async () => {
+    updateTrayTooltip("connecting");
+    fatalErrorRef.current = false;
+
+    const adminOk = await invoke('check_admin').catch(() => false);
+    if (!adminOk) {
+      addLog('❌ Discord Split için yönetici (Admin) yetkisi gereklidir. Uygulamayı sağ tık → Yönetici olarak çalıştır ile açın.', 'error');
+      setIsProcessing(false);
+      isStartingEngine.current = false;
+      updateTrayTooltip("disconnected");
+      return;
+    }
+
+    addLog('🎯 Discord Split başlatılıyor — yalnızca Discord trafiği etkilenecek.', 'info');
+
+    try {
+      const divertConfig = buildDiscordSplitConfig();
+      await invoke('start_divert_engine', { config: divertConfig });
+    } catch (e) {
+      addLog(`❌ Discord Split başlatılamadı: ${e}`, 'error');
+      setIsProcessing(false);
+      isStartingEngine.current = false;
+      return;
+    }
+
+    let running = false;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      running = await invoke('check_divert_running').catch(() => false);
+      if (running) break;
+    }
+
+    if (!running) {
+      const divertLog = await invoke('get_divert_log').catch(() => '');
+      if (divertLog.trim()) {
+        divertLog.trim().split('\n').forEach(line => addLog(line, 'error'));
+      } else {
+        addLog('❌ Discord Split başlatılamadı. Yönetici olarak çalıştırın.', 'error');
+      }
+      setIsProcessing(false);
+      isStartingEngine.current = false;
+      return;
+    }
+
+    retryCount.current = 0;
+    userIntentDisconnect.current = false;
+    setIsConnected(true);
+    setIsProcessing(false);
+    addLog('🎯 Discord Split aktif — yalnızca Discord bypass ediliyor, diğer tüm trafik dokunulmadan geçiyor.', 'success');
+    notifyUser("S2shenDPI", "Discord Split aktif", "connect");
+    updateTrayTooltip("connected");
+    isStartingEngine.current = false;
+  };
 
   const startGameModeEngine = async () => {
     updateTrayTooltip("connecting");
@@ -471,7 +544,7 @@ function App() {
     setIsConnected(true);
     setIsProcessing(false);
     addLog('🎮 Oyun Modu aktif — Roblox ve UDP oyunlar hazır.', 'success');
-    notifyUser("DarknesDPI", "Oyun Modu aktif", "connect");
+    notifyUser("S2shenDPI", "Oyun Modu aktif", "connect");
     updateTrayTooltip("connected");
     isStartingEngine.current = false;
   };
@@ -492,20 +565,20 @@ function App() {
                 ?.toUpperCase()
             : "SYSTEM";
           const nm = configRef.current.networkMode || 'smooth';
-          const modeBadges = { smooth: '⚡', game: '🎮', super: '✨' };
-          tooltip = `🟢 DarknesDPI - ${t.statusConnected} ${modeBadges[nm] || '⚡'}\n127.0.0.1:${currentPortRef.current}\nDNS: ${dnsName}`;
+          const modeBadges = { smooth: '⚡', game: '🎮', super: '✨', discordSplit: '🎯' };
+          tooltip = `🟢 S2shenDPI - ${t.statusConnected} ${modeBadges[nm] || '⚡'}\n127.0.0.1:${currentPortRef.current}\nDNS: ${dnsName}`;
           break;
         case "disconnected":
-          tooltip = `🔴 DarknesDPI - ${t.statusInactive}`;
+          tooltip = `🔴 S2shenDPI - ${t.statusInactive}`;
           break;
         case "retrying":
-          tooltip = `🔄 DarknesDPI - ${t.btnConnecting}\n${retryCount.current}/5...`;
+          tooltip = `🔄 S2shenDPI - ${t.btnConnecting}\n${retryCount.current}/5...`;
           break;
         case "connecting":
-          tooltip = `⏳ DarknesDPI - ${t.btnConnecting}`;
+          tooltip = `⏳ S2shenDPI - ${t.btnConnecting}`;
           break;
         default:
-          tooltip = "🛡️ DarknesDPI";
+          tooltip = "🛡️ S2shenDPI";
       }
       await invoke("update_tray_tooltip", { tooltip });
     } catch (e) {
@@ -594,6 +667,11 @@ function App() {
   const startEngine = async (ignoredPort, portRetryCount = 0) => {
     if (isStartingEngine.current || childProcess.current) return;
     isStartingEngine.current = true;
+
+    if (configRef.current.networkMode === 'discordSplit') {
+      await startDiscordSplitEngine();
+      return;
+    }
 
     if (configRef.current.networkMode === 'game') {
       await startGameModeEngine();
@@ -728,7 +806,7 @@ function App() {
         args.push("--https-split-mode", "sni");
       }
 
-      const command = Command.sidecar("binaries/darknes-proxy", args);
+      const command = Command.sidecar("binaries/s2shen-proxy", args);
 
       let connectionConfirmed = false;
       let isReady = false;
@@ -873,7 +951,7 @@ function App() {
           setIsConnected(true);
           setIsProcessing(false);
           addLog(t.logConnected, "success", { i18nKey: "logConnected" });
-          notifyUser("DarknesDPI", t.logConnected, "connect");
+          notifyUser("S2shenDPI", t.logConnected, "connect");
           updateTrayTooltip("connected");
           if (configRef.current.lanSharing) {
             (async () => {
@@ -979,7 +1057,7 @@ function App() {
             addLog(t.logNpcapFallback || "⚠️ Npcap sürücüsü yanıt vermiyor. Gelişmiş bypass kapatılıp tekrar deneniyor...", "warn");
             configRef.current = { ...configRef.current, advancedBypass: false };
             setConfig(prev => ({ ...prev, advancedBypass: false }));
-            localStorage.setItem('darknesdpi_config', JSON.stringify({ ...configRef.current, advancedBypass: false }));
+            localStorage.setItem('s2shendpi_config', JSON.stringify({ ...configRef.current, advancedBypass: false }));
             retryCount.current = 0; // Reset retry
             fatalErrorRef.current = false; // Hatayı temizle, tekrar denesin
             setIsProcessing(true);
@@ -1000,7 +1078,7 @@ function App() {
             addLog(`🔄 ${t.logAutoReconnect}`, "info", {
               i18nKey: "logAutoReconnect",
             });
-            notifyUser("DarknesDPI", t.logAutoReconnect, "disconnect");
+            notifyUser("S2shenDPI", t.logAutoReconnect, "disconnect");
             setIsProcessing(true);
             attemptReconnect();
           }
@@ -1052,7 +1130,7 @@ function App() {
           setIsConnected(true);
           setIsProcessing(false);
           addLog(t.logConnected, "info", { i18nKey: "logConnected" });
-          notifyUser("DarknesDPI", t.logConnected, "connect");
+          notifyUser("S2shenDPI", t.logConnected, "connect");
           updateTrayTooltip("connected"); // ✅ Auto-connect başarılı
           if (configRef.current.lanSharing) {
             try {
@@ -1078,7 +1156,7 @@ function App() {
       const errStr = String(e).toLowerCase();
       if (errStr.includes("denied") || errStr.includes("access") || errStr.includes("not found") || errStr.includes("os error")) {
         addLog(
-          "⚠️ " + (t.logAntivirusWarning || "Windows Defender veya antivirüs yazılımınız 'darknes-proxy.exe' dosyasını engellemiş olabilir. Lütfen dosyayı antivirüs dışlama listesine (exclusion) ekleyin."),
+          "⚠️ " + (t.logAntivirusWarning || "Güvenlik yazılımınız 's2shen-proxy' dosyasını engellemiş olabilir. Lütfen uygulamanın çalışmasına izin verin."),
           "warn",
           { i18nKey: "logAntivirusWarning" }
         );
@@ -1136,7 +1214,7 @@ function App() {
 
       // Eğer kapatma (shutdown) sırasındaysa, bildirim yollama.
       if (!isAppClosingRef.current) {
-        notifyUser("DarknesDPI", t.notifDisconnectManual, "disconnect_manual"); // Özel notification event tipi
+        notifyUser("S2shenDPI", t.notifDisconnectManual, "disconnect_manual"); // Özel notification event tipi
       }
 
       setIsProcessing(false);
@@ -1345,7 +1423,7 @@ function App() {
         await clearProxy(true);
         updateTrayTooltip("disconnected");
 
-        const isFirstRun = !localStorage.getItem('darknesdpi_first_run_done');
+        const isFirstRun = !localStorage.getItem('s2shendpi_first_run_done');
         if (configRef.current.autoConnect && !childProcess.current && !isFirstRun) {
           setIsProcessing(true);
           startEngine(8080);
@@ -1359,7 +1437,7 @@ function App() {
 
         // Güncelleme kontrolü (GitHub API)
         try {
-          const res = await fetch("https://api.github.com/repos/shencim/DarknesDPI/releases/latest");
+          const res = await fetch("https://api.github.com/repos/shencim/S2shenDPI/releases/latest");
           if (res.ok) {
             const data = await res.json();
             const latestVer = data.tag_name?.replace('v', '');
@@ -1401,7 +1479,7 @@ function App() {
           getCurrentWindow().setFocus();
           const confirmed = await customConfirm(
             t.confirmExitDesc ||
-              "Darknes motorunu durdurup çıkmak istediğinize emin misiniz?",
+              "S2shen motorunu durdurup çıkmak istediğinize emin misiniz?",
             { title: t.confirmExitTitle || "Çıkış" },
           );
           if (!confirmed) {
@@ -1499,7 +1577,7 @@ function App() {
     if (configRef.current.requireConfirmation !== false) {
       const confirmed = await customConfirm(
         t.confirmExitDesc ||
-          "Darknes motorunu durdurup çıkmak istediğinize emin misiniz?",
+          "S2shen motorunu durdurup çıkmak istediğinize emin misiniz?",
         { title: t.confirmExitTitle || "Çıkış" },
       );
       if (!confirmed) return;
@@ -1567,8 +1645,8 @@ function App() {
       updateTrayTooltip('disconnected');
     };
     
-    window.addEventListener('darknesdpi-force-disconnect', handleForceDisconnect);
-    return () => window.removeEventListener('darknesdpi-force-disconnect', handleForceDisconnect);
+    window.addEventListener('s2shendpi-force-disconnect', handleForceDisconnect);
+    return () => window.removeEventListener('s2shendpi-force-disconnect', handleForceDisconnect);
   }, []);
 
   // DPI & Layout Scaling Fix
@@ -1690,8 +1768,8 @@ function App() {
               }}
             >
               <img
-                src="/darknesdpi-logo.png"
-                alt="DarknesDPI"
+                src="/s2shendpi-logo.png"
+                alt="S2shenDPI"
                 style={{
                   width: "70px",
                   height: "70px",
@@ -1702,7 +1780,7 @@ function App() {
                 }}
               />
               <h1 style={{ fontSize: "1.3rem", fontWeight: "600", color: "#fff", marginBottom: "0.5rem" }}>
-                {t.confirmExitTitle || "DarknesDPI Kapatılıyor"}
+                {t.confirmExitTitle || "S2shenDPI Kapatılıyor"}
               </h1>
               <p style={{ color: "#a1a1aa", fontSize: "0.95rem" }}>
                 <AnimatePresence mode="wait">
@@ -1777,8 +1855,8 @@ function App() {
               }}
             >
               <img
-                src="/darknesdpi-logo.png"
-                alt="DarknesDPI"
+                src="/s2shendpi-logo.png"
+                alt="S2shenDPI"
                 style={{
                   width: "80px",
                   height: "80px",
@@ -1964,7 +2042,7 @@ function App() {
             }} />
 
             <div style={{ zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "420px", width: "100%" }}>
-              <img src="/darknesdpi-logo.png" alt="DarknesDPI" style={{ width: "56px", height: "56px", marginBottom: "1rem", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)" }} />
+              <img src="/s2shendpi-logo.png" alt="S2shenDPI" style={{ width: "56px", height: "56px", marginBottom: "1rem", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)" }} />
               <h1 style={{ fontSize: "1.25rem", marginBottom: "0.5rem", color: "#fff", fontWeight: "700" }}>{t.issOverlayTitle}</h1>
               <p style={{ color: "#a1a1aa", marginBottom: detectedIsp ? "0.75rem" : "1.25rem", lineHeight: "1.5", fontSize: "0.85rem" }}>{t.issOverlayDesc}</p>
               {detectedIsp && (
@@ -2038,7 +2116,7 @@ function App() {
 
               <button
                 onClick={() => {
-                  localStorage.setItem('darknesdpi_first_run_done', 'true');
+                  localStorage.setItem('s2shendpi_first_run_done', 'true');
                   setShowFirstRunISS(false);
                   // Otomatik bağlan
                   if (!isConnected && !isProcessing) {
@@ -2075,7 +2153,7 @@ function App() {
 
               <button
                 onClick={() => {
-                  localStorage.setItem('darknesdpi_first_run_done', 'true');
+                  localStorage.setItem('s2shendpi_first_run_done', 'true');
                   setShowFirstRunISS(false);
                   if (configRef.current.autoConnect && !isConnected && !isProcessing) {
                     retryCount.current = 0;
@@ -2106,8 +2184,8 @@ function App() {
       {/* Header */}
       <header className="app-header">
         <div className="brand">
-          <img src="/darknesdpi-logo.png" alt="DarknesDPI" className="brand-logo" />
-          <span className="brand-name">DARKNESDPI</span>
+          <img src="/s2shendpi-logo.png" alt="S2shenDPI" className="brand-logo" />
+          <span className="brand-name">S2SHENDPI</span>
         </div>
         <div
           className={`status-badge ${isConnected ? "active" : isProcessing ? "processing" : "passive"}`}

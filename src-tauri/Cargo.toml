@@ -1,5 +1,5 @@
 [package]
-name = "DarknesDPI"
+name = "S2shenDPI"
 version = "4.0.0"
 description = "Dpi Bypass Tool."
 authors = ["Shencim"]
@@ -11,7 +11,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "darknes_tauri_lib"
+name = "s2shen_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -36,6 +36,9 @@ tauri-plugin-autostart = "2"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["wininet", "synchapi", "errhandlingapi", "winerror", "processthreadsapi", "securitybaseapi", "handleapi", "winnt", "winuser", "libloaderapi"] }
 winreg = "0.52"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # ✅ Release optimizasyonları ekle
 [profile.release]

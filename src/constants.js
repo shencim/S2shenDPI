@@ -1,8 +1,8 @@
 export const URLS = {
-  discord: "https://discord.gg/darknes",
-  github: "https://github.com/shencim/DarknesDPI",
-  tutorialHowItWorks: "https://darknes.com.tr",
-  tutorialProxy: "https://darknes.com.tr",
+  discord: "https://discord.gg/s2shen",
+  github: "https://github.com/shencim/S2shenDPI",
+  tutorialHowItWorks: "https://s2shen.com.tr",
+  tutorialProxy: "https://s2shen.com.tr",
 };
 
 export const DNS_MAP = {
@@ -24,7 +24,7 @@ export const DOH_MAP = {
 };
 
 export const APP = {
-  name: "DarknesDPI",
+  name: "S2shenDPI",
   version: "4.0.0",
   designWidth: 380,
   designHeight: 700,

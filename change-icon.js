@@ -9,9 +9,9 @@ const __dirname = path.dirname(__filename);
 async function main() {
     const rceditModule = await import('rcedit');
     const rcedit = rceditModule.rcedit || rceditModule.default;
-    const exePath = path.join(__dirname, 'src-tauri', 'binaries', 'darknes-proxy-x86_64-pc-windows-msvc.exe');
-    const pngPath = path.join(__dirname, 'public', 'darknesdpi-engine.png');
-    const iconPath = path.join(__dirname, 'src-tauri', 'icons', 'darknes-engine.ico');
+    const exePath = path.join(__dirname, 'src-tauri', 'binaries', 's2shen-proxy-x86_64-pc-windows-msvc.exe');
+    const pngPath = path.join(__dirname, 'public', 's2shendpi-engine.png');
+    const iconPath = path.join(__dirname, 'src-tauri', 'icons', 's2shen-engine.ico');
     
     // Also convert uninstall.png to uninstall.ico
     const uninstallPngPath = path.join(__dirname, 'public', 'uninstall.png');
@@ -38,8 +38,8 @@ async function main() {
         await rcedit(exePath, {
             icon: iconPath,
             'version-string': {
-                ProductName: 'DarknesDPI',
-                FileDescription: 'DarknesDPI Service',
+                ProductName: 'S2shenDPI',
+                FileDescription: 'S2shenDPI Service',
                 CompanyName: 'Shencim',
                 LegalCopyright: 'Copyright © 2026 Shencim'
             }

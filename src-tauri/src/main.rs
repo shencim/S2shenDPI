@@ -39,15 +39,32 @@ fn main() {
                 .status();
 
             let _ = std::process::Command::new("taskkill")
-                .args(["/F", "/IM", "darknes-proxy.exe"])
+                .args(["/F", "/IM", "s2shen-proxy.exe"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .status();
         }
 
-        eprintln!("DarknesDPI PANIC: {}", panic_info);
+        #[cfg(target_os = "linux")]
+        {
+            // Proxy ayarlarını sıfırla
+            let _ = std::process::Command::new("gsettings")
+                .args(["set", "org.gnome.system.proxy", "mode", "none"])
+                .status();
+            // Süreçleri temizle
+            let _ = std::process::Command::new("pkill")
+                .args(["-f", "s2shen-proxy"])
+                .status();
+            let _ = std::process::Command::new("pkill")
+                .args(["-f", "s2shen-divert"])
+                .status();
+            // PID lock temizle
+            let _ = std::fs::remove_file("/tmp/s2shendpi.lock");
+        }
+
+        eprintln!("S2shenDPI PANIC: {}", panic_info);
     }));
 
-    darknes_tauri_lib::run()
+    s2shen_tauri_lib::run()
 }

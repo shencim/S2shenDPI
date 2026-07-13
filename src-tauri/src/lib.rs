@@ -11,6 +11,7 @@ use tauri::Emitter;
 use tauri::Manager;
 
 
+
 #[cfg(target_os = "windows")]
 mod registry {
     use winreg::enums::*;
@@ -161,13 +162,66 @@ mod registry {
     }
 }
 
+#[cfg(target_os = "linux")]
+mod linux_proxy {
+    use std::process::Command;
+
+    pub fn set_proxy(port: u16) -> Result<(), String> {
+        let host = "127.0.0.1";
+        let port_str = port.to_string();
+        let cmds: &[&[&str]] = &[
+            &["set", "org.gnome.system.proxy", "mode", "manual"],
+            &["set", "org.gnome.system.proxy.http", "host", host],
+            &["set", "org.gnome.system.proxy.http", "port", &port_str],
+            &["set", "org.gnome.system.proxy.https", "host", host],
+            &["set", "org.gnome.system.proxy.https", "port", &port_str],
+            &["set", "org.gnome.system.proxy.socks", "host", host],
+            &["set", "org.gnome.system.proxy.socks", "port", &port_str],
+        ];
+        for args in cmds {
+            let _ = Command::new("gsettings").args(*args).status();
+        }
+        // /etc/environment ile de system-wide ayarla (CLI uygulamaları için)
+        let env_line = format!("http_proxy=http://{}:{}/\nhttps_proxy=http://{}:{}/\nHTTP_PROXY=http://{}:{}/\nHTTPS_PROXY=http://{}:{}/\n",
+            host, port, host, port, host, port, host, port);
+        let _ = std::fs::write("/tmp/s2shendpi_env_proxy.sh", &env_line);
+        Ok(())
+    }
+
+    pub fn clear_proxy() {
+        let _ = Command::new("gsettings")
+            .args(["set", "org.gnome.system.proxy", "mode", "none"])
+            .status();
+        let _ = std::fs::remove_file("/tmp/s2shendpi_env_proxy.sh");
+    }
+
+    pub fn flush_dns() {
+        // systemd-resolved (Fedora/Nobara varsayılanı)
+        let _ = Command::new("resolvectl").args(["flush-caches"]).status();
+        // fallback
+        let _ = Command::new("systemd-resolve").args(["--flush-caches"]).status();
+    }
+
+    pub fn read_proxy_mode() -> String {
+        Command::new("gsettings")
+            .args(["get", "org.gnome.system.proxy", "mode"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .unwrap_or_default()
+            .trim()
+            .trim_matches('\'')
+            .to_string()
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn guard_exe_path() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
     let candidates = [
-        dir.join("binaries").join("darknes-guard.exe"),
-        dir.join("darknes-guard.exe"),
+        dir.join("binaries").join("s2shen-guard.exe"),
+        dir.join("s2shen-guard.exe"),
     ];
     candidates.into_iter().find(|p| p.exists())
 }
@@ -238,9 +292,21 @@ fn divert_exe_path() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
     let candidates = [
-        dir.join("darknes-divert-x86_64-pc-windows-msvc.exe"),
-        dir.join("darknes-divert.exe"),
-        dir.join("binaries").join("darknes-divert.exe"),
+        dir.join("s2shen-divert-x86_64-pc-windows-msvc.exe"),
+        dir.join("s2shen-divert.exe"),
+        dir.join("binaries").join("s2shen-divert.exe"),
+    ];
+    candidates.into_iter().find(|p| p.exists())
+}
+
+#[cfg(target_os = "linux")]
+fn divert_exe_path() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let candidates = [
+        dir.join("s2shen-divert-x86_64-unknown-linux-gnu"),
+        dir.join("s2shen-divert"),
+        dir.join("binaries").join("s2shen-divert"),
     ];
     candidates.into_iter().find(|p| p.exists())
 }
@@ -255,6 +321,20 @@ struct DivertConfig {
     dns_redirect: bool,
     dns_addr: String,
     proxy_port: u16,
+    #[serde(default = "default_chunk_size")]
+    chunk_size: u32,
+    #[serde(default = "default_dpi_tier")]
+    dpi_tier: String,
+    #[serde(default)]
+    sni_filter: bool,
+}
+
+fn default_chunk_size() -> u32 {
+    2
+}
+
+fn default_dpi_tier() -> String {
+    "1".to_string()
 }
 
 fn launch_divert_process(config: &DivertConfig) -> Result<(), String> {
@@ -265,7 +345,7 @@ fn launch_divert_process(config: &DivertConfig) -> Result<(), String> {
 
         let exe = match divert_exe_path() {
             Some(p) => p,
-            None => return Err("darknes-divert.exe bulunamadı. Oyun Modu için bu dosya gereklidir.".to_string()),
+            None => return Err("s2shen-divert.exe bulunamadı. Oyun Modu için bu dosya gereklidir.".to_string()),
         };
 
         let mut args: Vec<String> = vec![];
@@ -293,8 +373,15 @@ fn launch_divert_process(config: &DivertConfig) -> Result<(), String> {
             args.push("--proxy-port".to_string());
             args.push(config.proxy_port.to_string());
         }
+        args.push("--chunk-size".to_string());
+        args.push(config.chunk_size.to_string());
+        args.push("--dpi-tier".to_string());
+        args.push(config.dpi_tier.clone());
+        if config.sni_filter {
+            args.push("--sni-filter".to_string());
+        }
 
-        let pid_file = std::env::temp_dir().join("darknesdpi_divert.pid");
+        let pid_file = std::env::temp_dir().join("s2shendpi_divert.pid");
         args.push("--pid-file".to_string());
         args.push(pid_file.to_string_lossy().to_string());
 
@@ -311,7 +398,7 @@ fn launch_divert_process(config: &DivertConfig) -> Result<(), String> {
             return Ok(());
         }
 
-        let log_file = std::env::temp_dir().join("darknesdpi_divert.log");
+        let log_file = std::env::temp_dir().join("s2shendpi_divert.log");
         let header = format!("[LAUNCH] exe={}\n[LAUNCH] args={:?}\n", exe.display(), args);
         let _ = std::fs::write(&log_file, header);
 
@@ -334,10 +421,93 @@ fn launch_divert_process(config: &DivertConfig) -> Result<(), String> {
                 let _ = std::fs::write(&pid_file, pid.to_string());
                 Ok(())
             }
-            Err(e) => Err(format!("darknes-divert.exe başlatılamadı: {}", e)),
+            Err(e) => Err(format!("s2shen-divert.exe başlatılamadı: {}", e)),
         }
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    {
+        let exe = match divert_exe_path() {
+            Some(p) => p,
+            None => return Err("s2shen-divert bulunamadı. Oyun Modu için bu dosya gereklidir.".to_string()),
+        };
+
+        let mut args: Vec<String> = vec![];
+        args.push("--mode".to_string());
+        args.push(config.mode.clone());
+
+        if config.auto_ttl {
+            args.push("--auto-ttl".to_string());
+        }
+        if config.block_quic {
+            args.push("--block-quic".to_string());
+        }
+        if config.wrong_chksum {
+            args.push("--wrong-chksum".to_string());
+        }
+        if config.wrong_seq {
+            args.push("--wrong-seq".to_string());
+        }
+        if config.dns_redirect && !config.dns_addr.is_empty() {
+            args.push("--dns-redirect".to_string());
+            args.push("--dns-addr".to_string());
+            args.push(config.dns_addr.clone());
+        }
+        if config.proxy_port > 0 {
+            args.push("--proxy-port".to_string());
+            args.push(config.proxy_port.to_string());
+        }
+        args.push("--chunk-size".to_string());
+        args.push(config.chunk_size.to_string());
+        args.push("--dpi-tier".to_string());
+        args.push(config.dpi_tier.clone());
+        if config.sni_filter {
+            args.push("--sni-filter".to_string());
+        }
+
+        let pid_file = std::env::temp_dir().join("s2shendpi_divert.pid");
+        args.push("--pid-file".to_string());
+        args.push(pid_file.to_string_lossy().to_string());
+
+        let dir = exe.parent()
+            .ok_or_else(|| "Divert exe dizini alınamadı".to_string())?
+            .to_path_buf();
+
+        let mut guard = match divert_process().lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+
+        if guard.is_some() {
+            return Ok(());
+        }
+
+        let log_file = std::env::temp_dir().join("s2shendpi_divert.log");
+        let header = format!("[LAUNCH] exe={}\n[LAUNCH] args={:?}\n", exe.display(), args);
+        let _ = std::fs::write(&log_file, header);
+
+        let stdout_f = std::fs::OpenOptions::new().create(true).append(true).open(&log_file).ok();
+        let stderr_f = stdout_f.as_ref().and_then(|f| f.try_clone().ok());
+        let stdout_stdio = stdout_f.map(std::process::Stdio::from).unwrap_or_else(|| std::process::Stdio::null());
+        let stderr_stdio = stderr_f.map(std::process::Stdio::from).unwrap_or_else(|| std::process::Stdio::null());
+
+        match std::process::Command::new(&exe)
+            .args(&args)
+            .current_dir(&dir)
+            .stdout(stdout_stdio)
+            .stderr(stderr_stdio)
+            .spawn()
+        {
+            Ok(child) => {
+                let pid = child.id();
+                *guard = Some(child);
+                let _ = std::fs::write(&pid_file, pid.to_string());
+                Ok(())
+            }
+            Err(e) => Err(format!("s2shen-divert başlatılamadı: {}", e)),
+        }
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         let _ = config;
         Ok(())
@@ -353,11 +523,11 @@ fn stop_divert_process() {
         let _ = child.kill();
     }
     *g = None;
-    let _ = std::fs::remove_file(std::env::temp_dir().join("darknesdpi_divert.pid"));
+    let _ = std::fs::remove_file(std::env::temp_dir().join("s2shendpi_divert.pid"));
 }
 
 fn sentinel_path() -> std::path::PathBuf {
-    std::env::temp_dir().join("darknesdpi_proxy_active.lock")
+    std::env::temp_dir().join("s2shendpi_proxy_active.lock")
 }
 
 /// PAC dosyası yolu — AutoConfigURL ile proxy yapılandırması için
@@ -572,18 +742,46 @@ impl Default for PacServerState {
 
 const PAC_PORT_START: u16 = 8787;
 const PAC_PORT_END: u16 = 8887;
-const SUPPORT_URL: &str = "https://discord.gg/darknes";
+const SUPPORT_URL: &str = "https://discord.gg/s2shen";
 
 /// Bağlantı kesildiğinde kullanılan fallback PAC: tüm trafiği DIRECT yönlendirir
 /// Bu sayede cihazlar internet erişimini kaybetmez
 fn make_pac_direct_body() -> String {
     r#"function FindProxyForURL(url, host) {
-    // DarknesDPI proxy devre dışı — tüm trafik doğrudan çıkış
+    // S2shenDPI proxy devre dışı — tüm trafik doğrudan çıkış
     // Bu PAC dosyası otomatik olarak sunulur; ayar değişikliği gerekmez
     return "DIRECT";
 }
 "#
     .to_string()
+}
+
+/// Kullanıcının girdiği özel bypass domain'lerini doğrular.
+/// Yalnızca harf/rakam/tire/nokta ve isteğe bağlı başta "*." joker karakterine izin verir.
+/// Bu filtre olmadan `;` içeren bir girdi registry ProxyOverride listesine (task risk: proxy'yi
+/// tamamen devre dışı bırakan `*` enjeksiyonu), `"` içeren bir girdi ise PAC sunucusunun
+/// ürettiği JavaScript'e enjekte edilip LAN'daki cihazlarda script injection'a yol açabilirdi.
+fn is_valid_bypass_domain(s: &str) -> bool {
+    let s = s.trim();
+    if s.is_empty() || s.len() > 253 {
+        return false;
+    }
+    let rest = s.strip_prefix("*.").unwrap_or(s);
+    if rest.is_empty() {
+        return false;
+    }
+    rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        && !rest.starts_with('.')
+        && !rest.starts_with('-')
+        && !rest.ends_with('-')
+}
+
+fn sanitize_bypass_domains(domains: &[String]) -> Vec<String> {
+    domains
+        .iter()
+        .map(|d| d.trim().to_lowercase())
+        .filter(|d| is_valid_bypass_domain(d))
+        .collect()
 }
 
 /// Production PAC: yerel ağ DIRECT, diğerleri PROXY ip:port; DIRECT (fail-safe)
@@ -654,7 +852,7 @@ fn make_setup_html(pac_url: &str) -> String {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-<title>DarknesDPI – Kurulum</title>
+<title>S2shenDPI – Kurulum</title>
 <style>
 :root {{
     --bg-color: #09090b;
@@ -724,7 +922,7 @@ body {{ background-color: var(--bg-color); color: var(--text-main); line-height:
     </div>
 
     <header class="header">
-        <h1 class="title" data-tr="DarknesDPI'a Bağlan" data-en="Connect to DarknesDPI">DarknesDPI'a Bağlan</h1>
+        <h1 class="title" data-tr="S2shenDPI'a Bağlan" data-en="Connect to S2shenDPI">S2shenDPI'a Bağlan</h1>
         <p class="subtitle" data-tr="İnternet trafiğinizi şifreleyin ve engelleri aşın" data-en="Bypass Internet Restrictions">İnternet Engellerini Aşın</p>
     </header>
 
@@ -732,7 +930,7 @@ body {{ background-color: var(--bg-color); color: var(--text-main); line-height:
         <span class="notice-icon">⚠</span>
         <div>
             <strong data-tr="DİKKAT:" data-en="ATTENTION:">DİKKAT:</strong>
-            <span data-tr="DarknesDPI kapatıldıktan sonra YouTube vb. uygulamalarda internet sorunu yaşarsanız (eski önbellek nedeniyle), Wi-Fi bağlantısını kapatıp açmanız yeterlidir." data-en="If apps like YouTube lose internet access after closing DarknesDPI (due to cached connections), simply toggle your Wi-Fi off and on.">DarknesDPI kapatıldıktan sonra YouTube vb. uygulamalarda internet sorunu yaşarsanız (eski önbellek nedeniyle), Wi-Fi bağlantısını kapatıp açmanız yeterlidir.</span>
+            <span data-tr="S2shenDPI kapatıldıktan sonra YouTube vb. uygulamalarda internet sorunu yaşarsanız (eski önbellek nedeniyle), Wi-Fi bağlantısını kapatıp açmanız yeterlidir." data-en="If apps like YouTube lose internet access after closing S2shenDPI (due to cached connections), simply toggle your Wi-Fi off and on.">S2shenDPI kapatıldıktan sonra YouTube vb. uygulamalarda internet sorunu yaşarsanız (eski önbellek nedeniyle), Wi-Fi bağlantısını kapatıp açmanız yeterlidir.</span>
         </div>
     </div>
 
@@ -749,7 +947,7 @@ body {{ background-color: var(--bg-color); color: var(--text-main); line-height:
             Adresi Kopyala
         </button>
 
-        <a href="https://darknesdpi.vercel.app/proxy" target="_blank" class="btn-guide" data-tr="❓ Görsel Kurulum Rehberi" data-en="❓ Visual Setup Guide">
+        <a href="https://s2shendpi.vercel.app/proxy" target="_blank" class="btn-guide" data-tr="❓ Görsel Kurulum Rehberi" data-en="❓ Visual Setup Guide">
             ❓ Görsel Kurulum Rehberi
         </a>
 
@@ -1010,7 +1208,7 @@ fn manage_firewall_rules(enable: bool, proxy_port: u16, pac_port: u16) {
                 "firewall",
                 "delete",
                 "rule",
-                "name=DarknesDPI_Proxy",
+                "name=S2shenDPI_Proxy",
             ])
             .creation_flags(CREATE_NO_WINDOW)
             .stdout(std::process::Stdio::null())
@@ -1023,7 +1221,7 @@ fn manage_firewall_rules(enable: bool, proxy_port: u16, pac_port: u16) {
                 "firewall",
                 "delete",
                 "rule",
-                "name=DarknesDPI_PAC",
+                "name=S2shenDPI_PAC",
             ])
             .creation_flags(CREATE_NO_WINDOW)
             .stdout(std::process::Stdio::null())
@@ -1037,7 +1235,7 @@ fn manage_firewall_rules(enable: bool, proxy_port: u16, pac_port: u16) {
                     "firewall",
                     "add",
                     "rule",
-                    "name=DarknesDPI_Proxy",
+                    "name=S2shenDPI_Proxy",
                     "dir=in",
                     "action=allow",
                     "protocol=TCP",
@@ -1054,13 +1252,34 @@ fn manage_firewall_rules(enable: bool, proxy_port: u16, pac_port: u16) {
                     "firewall",
                     "add",
                     "rule",
-                    "name=DarknesDPI_PAC",
+                    "name=S2shenDPI_PAC",
                     "dir=in",
                     "action=allow",
                     "protocol=TCP",
                     &format!("localport={}", pac_port),
                 ])
                 .creation_flags(CREATE_NO_WINDOW)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+    });
+}
+
+#[cfg(target_os = "linux")]
+fn manage_firewall_rules(enable: bool, proxy_port: u16, pac_port: u16) {
+    std::thread::spawn(move || {
+        let ports = if proxy_port > 0 {
+            vec![proxy_port, pac_port]
+        } else {
+            vec![]
+        };
+        for port in &ports {
+            let port_str = format!("{}/tcp", port);
+            let action = if enable { "--add-port" } else { "--remove-port" };
+            // firewall-cmd yoksa veya başarısız olursa sessizce devam et
+            let _ = std::process::Command::new("firewall-cmd")
+                .args([action, &port_str])
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .status();
@@ -1075,6 +1294,7 @@ fn start_pac_server(
     state: tauri::State<'_, PacServerState>,
 ) -> Result<PacResponse, String> {
     let lan_ip = get_safe_lan_ip();
+    let bypass_domains = sanitize_bypass_domains(&bypass_domains);
 
     // PAC body'yi güncelle — proxy moduna geç
     let new_pac_body = make_pac_body(&lan_ip, proxy_port, &bypass_domains);
@@ -1126,7 +1346,7 @@ fn start_pac_server(
     let listener = listener_result.ok_or_else(|| "PAC için uygun port bulunamadı".to_string())?;
     listener.set_nonblocking(true).map_err(|e| e.to_string())?;
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     manage_firewall_rules(true, proxy_port, found_port);
 
     let pac_url = format!("http://{}:{}/proxy.pac", lan_ip, found_port);
@@ -1310,6 +1530,13 @@ fn clear_system_proxy() -> Result<(), String> {
         stop_guard();
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        linux_proxy::clear_proxy();
+        linux_proxy::flush_dns();
+        manage_firewall_rules(false, 0, 0);
+    }
+
     stop_divert_process();
 
     let _ = std::fs::remove_file(sentinel_path());
@@ -1369,6 +1596,7 @@ fn set_system_proxy(port: u16, enable_winhttp: bool, custom_bypass_domains: Vec<
     if port < 1024 {
         return Err("Geçersiz port numarası (1024-65535 arası olmalı)".to_string());
     }
+    let custom_bypass_domains = sanitize_bypass_domains(&custom_bypass_domains);
 
     #[cfg(target_os = "windows")]
     {
@@ -1442,6 +1670,11 @@ fn set_system_proxy(port: u16, enable_winhttp: bool, custom_bypass_domains: Vec<
     #[cfg(target_os = "windows")]
     launch_guard();
 
+    #[cfg(target_os = "linux")]
+    {
+        linux_proxy::set_proxy(port)?;
+    }
+
     let _ = std::fs::write(sentinel_path(), format!("port={}", port));
 
     Ok(())
@@ -1503,7 +1736,15 @@ fn check_admin() -> bool {
             result != 0 && elevation.TokenIsElevated != 0
         }
     }
-    #[cfg(not(target_os = "windows"))]
+    // Linux'ta s2shen-divert (Oyun Modu) CAP_NET_ADMIN/root gerektirir; bunu
+    // her zaman `true` döndürmek kullanıcıya yanlış güven verip motoru
+    // başlatmaya çalıştırır (main_linux.go zaten reddeder, ama arayüz
+    // önceden gerçek dışı bir "yetkin var" onayı vermiş olur).
+    #[cfg(all(unix, not(target_os = "windows")))]
+    {
+        unsafe { libc::geteuid() == 0 }
+    }
+    #[cfg(not(any(target_os = "windows", unix)))]
     {
         true
     }
@@ -1515,14 +1756,14 @@ fn perform_app_exit(app: &tauri::AppHandle) {
     app.exit(0);
 }
 
-/// Uygulama açıldığında eski darknes-proxy süreçlerini temizle (Zombi süreç önleme)
+/// Uygulama açıldığında eski s2shen-proxy süreçlerini temizle (Zombi süreç önleme)
 #[tauri::command]
 fn save_sidecar_pid(pid: u32) {
-    let pid_file = std::env::temp_dir().join("darknesdpi_sidecar.pid");
+    let pid_file = std::env::temp_dir().join("s2shendpi_sidecar.pid");
     let _ = std::fs::write(&pid_file, pid.to_string());
 }
 
-/// Uygulama açıldığında eski darknes-proxy süreçlerini temizle (Zombi süreç önleme)
+/// Uygulama açıldığında eski s2shen-proxy süreçlerini temizle (Zombi süreç önleme)
 #[tauri::command]
 fn kill_zombie_sidecar() -> Result<String, String> {
     #[cfg(target_os = "windows")]
@@ -1530,7 +1771,7 @@ fn kill_zombie_sidecar() -> Result<String, String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-        let pid_file = std::env::temp_dir().join("darknesdpi_sidecar.pid");
+        let pid_file = std::env::temp_dir().join("s2shendpi_sidecar.pid");
         if let Ok(pid_str) = std::fs::read_to_string(&pid_file) {
             if let Ok(pid) = pid_str.trim().parse::<u32>() {
                 if pid > 0 {
@@ -1551,9 +1792,29 @@ fn kill_zombie_sidecar() -> Result<String, String> {
         }
         Ok("Zombi PID dosyası bulunamadı.".to_string())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     {
-        Ok("Zombi temizleme sadece Windows'ta desteklenir.".to_string())
+        let pid_file = std::env::temp_dir().join("s2shendpi_sidecar.pid");
+        if let Ok(pid_str) = std::fs::read_to_string(&pid_file) {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                if pid > 0 {
+                    unsafe { libc::kill(pid, libc::SIGTERM); }
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    // Süreç hâlâ çalışıyorsa SIGKILL gönder
+                    if unsafe { libc::kill(pid, 0) } == 0 {
+                        unsafe { libc::kill(pid, libc::SIGKILL); }
+                    }
+                    let _ = std::fs::remove_file(&pid_file);
+                    return Ok(format!("Zombi süreç (PID {}) durduruldu.", pid));
+                }
+            }
+        }
+        Ok("Zombi PID dosyası bulunamadı.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        Ok("Zombi temizleme bu platformda desteklenmez.".to_string())
     }
 }
 
@@ -1589,7 +1850,7 @@ fn check_divert_running() -> bool {
 
 #[tauri::command]
 fn get_divert_log() -> String {
-    let log_file = std::env::temp_dir().join("darknesdpi_divert.log");
+    let log_file = std::env::temp_dir().join("s2shendpi_divert.log");
     std::fs::read_to_string(&log_file).unwrap_or_default()
 }
 
@@ -1600,7 +1861,7 @@ fn kill_zombie_divert() -> Result<String, String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-        let pid_file = std::env::temp_dir().join("darknesdpi_divert.pid");
+        let pid_file = std::env::temp_dir().join("s2shendpi_divert.pid");
         if let Ok(pid_str) = std::fs::read_to_string(&pid_file) {
             if let Ok(pid) = pid_str.trim().parse::<u32>() {
                 if pid > 0 {
@@ -1619,9 +1880,28 @@ fn kill_zombie_divert() -> Result<String, String> {
         }
         Ok("Divert PID dosyası bulunamadı.".to_string())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     {
-        Ok("Sadece Windows desteklenir.".to_string())
+        let pid_file = std::env::temp_dir().join("s2shendpi_divert.pid");
+        if let Ok(pid_str) = std::fs::read_to_string(&pid_file) {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                if pid > 0 {
+                    unsafe { libc::kill(pid, libc::SIGTERM); }
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    if unsafe { libc::kill(pid, 0) } == 0 {
+                        unsafe { libc::kill(pid, libc::SIGKILL); }
+                    }
+                    let _ = std::fs::remove_file(&pid_file);
+                    return Ok(format!("Divert süreç (PID {}) durduruldu.", pid));
+                }
+            }
+        }
+        Ok("Divert PID dosyası bulunamadı.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        Ok("Bu platformda desteklenmez.".to_string())
     }
 }
 
@@ -1649,6 +1929,13 @@ async fn check_dns_latency(dns_ip: String) -> Result<u32, String> {
         Ok(_) => Ok(start.elapsed().as_millis() as u32),
         Err(_) => Ok(999),
     }
+}
+
+#[cfg(target_os = "linux")]
+fn dirs_home() -> std::path::PathBuf {
+    std::env::var("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("/root"))
 }
 
 /// Windows Task Scheduler üzerinden yönetici haklarıyla otomatik başlatma kaydeder
@@ -1694,14 +1981,14 @@ fn set_autostart_admin(enable: bool) -> Result<(), String> {
                 exe_str
             );
 
-            let tmp = std::env::temp_dir().join("darknesdpi_task.xml");
+            let tmp = std::env::temp_dir().join("s2shendpi_task.xml");
             let utf16_bytes: Vec<u8> = xml.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
             let mut with_bom: Vec<u8> = vec![0xFF, 0xFE];
             with_bom.extend(utf16_bytes);
             std::fs::write(&tmp, with_bom).map_err(|e| format!("XML yazılamadı: {}", e))?;
 
             let out = std::process::Command::new("schtasks")
-                .args(&["/Create", "/TN", "DarknesDPI", "/XML", &tmp.to_string_lossy(), "/F"])
+                .args(&["/Create", "/TN", "S2shenDPI", "/XML", &tmp.to_string_lossy(), "/F"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .output()
                 .map_err(|e| format!("schtasks çalıştırılamadı: {}", e))?;
@@ -1713,19 +2000,44 @@ fn set_autostart_admin(enable: bool) -> Result<(), String> {
             }
         } else {
             let _ = std::process::Command::new("schtasks")
-                .args(&["/Delete", "/TN", "DarknesDPI", "/F"])
+                .args(&["/Delete", "/TN", "S2shenDPI", "/F"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .output();
         }
         Ok(())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     {
-        Err("Sadece Windows desteklenir".to_string())
+        let autostart_dir = dirs_home().join(".config/autostart");
+        let desktop_path = autostart_dir.join("s2shen-dpi.desktop");
+
+        if enable {
+            let exe_path = std::env::current_exe()
+                .map_err(|e| format!("Exe yolu alınamadı: {}", e))?;
+            let exe_str = exe_path.to_string_lossy();
+
+            std::fs::create_dir_all(&autostart_dir)
+                .map_err(|e| format!("Autostart dizini oluşturulamadı: {}", e))?;
+
+            let desktop = format!(
+                "[Desktop Entry]\nType=Application\nName=S2shenDPI\nExec={}\nIcon=network-vpn\nComment=S2shenDPI otomatik başlatma\nX-GNOME-Autostart-enabled=true\nHidden=false\n",
+                exe_str
+            );
+            std::fs::write(&desktop_path, desktop)
+                .map_err(|e| format!(".desktop dosyası yazılamadı: {}", e))?;
+        } else {
+            let _ = std::fs::remove_file(&desktop_path);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        Err("Bu platformda desteklenmez".to_string())
     }
 }
 
-/// Task Scheduler'da DarknesDPI görevi var mı kontrol eder
+/// Task Scheduler'da S2shenDPI görevi var mı kontrol eder
 #[tauri::command]
 fn check_autostart_admin() -> bool {
     #[cfg(target_os = "windows")]
@@ -1733,13 +2045,20 @@ fn check_autostart_admin() -> bool {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         if let Ok(out) = std::process::Command::new("schtasks")
-            .args(&["/Query", "/TN", "DarknesDPI"])
+            .args(&["/Query", "/TN", "S2shenDPI"])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
         {
             return out.status.success();
         }
     }
+    #[cfg(target_os = "linux")]
+    {
+        return dirs_home()
+            .join(".config/autostart/s2shen-dpi.desktop")
+            .exists();
+    }
+    #[allow(unreachable_code)]
     false
 }
 
@@ -1756,6 +2075,34 @@ fn get_isp_name() -> String {
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            if text.contains("turk telekom") || text.contains("ttnet") || text.contains("türk telekom") {
+                return "turktelekom".to_string();
+            }
+            if text.contains("vodafone") {
+                return "vodafone".to_string();
+            }
+            if text.contains("kablonet") {
+                return "kablonet".to_string();
+            }
+            if text.contains("superonline") {
+                return "superonline".to_string();
+            }
+            if text.contains("milenicom") {
+                return "milenicom".to_string();
+            }
+            if text.contains("turknet") || text.contains("türknet") {
+                return "turknet".to_string();
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // ipinfo.io/org: "AS9121 Turk Telekom" gibi döner
+        if let Ok(out) = std::process::Command::new("curl")
+            .args(["-s", "--max-time", "5", "https://ipinfo.io/org"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
             if text.contains("turk telekom") || text.contains("ttnet") || text.contains("türk telekom") {
                 return "turktelekom".to_string();
             }
@@ -1815,7 +2162,6 @@ fn startup_proxy_cleanup() -> Result<bool, String> {
 
             let _ = registry::clear_proxy();
 
-            // DNS cache temizle
             let _ = Command::new("ipconfig")
                 .arg("/flushdns")
                 .creation_flags(CREATE_NO_WINDOW)
@@ -1823,9 +2169,14 @@ fn startup_proxy_cleanup() -> Result<bool, String> {
                 .stderr(std::process::Stdio::null())
                 .spawn();
 
-            // Tarayıcılara bildir
             notify_proxy_change();
+            manage_firewall_rules(false, 0, 0);
+        }
 
+        #[cfg(target_os = "linux")]
+        {
+            linux_proxy::clear_proxy();
+            linux_proxy::flush_dns();
             manage_firewall_rules(false, 0, 0);
         }
 
@@ -1844,34 +2195,59 @@ fn startup_proxy_cleanup() -> Result<bool, String> {
 
 #[tauri::command]
 fn check_driver() -> bool {
-    let exe = std::env::current_exe().unwrap_or_default();
-    let dir = exe.parent().unwrap_or(std::path::Path::new(""));
-    dir.join("WinDivert.dll").exists()
-        || dir.join("WinDivert64.sys").exists()
+    #[cfg(target_os = "windows")]
+    {
+        let exe = std::env::current_exe().unwrap_or_default();
+        let dir = exe.parent().unwrap_or(std::path::Path::new(""));
+        return dir.join("WinDivert.dll").exists()
+            || dir.join("WinDivert64.sys").exists();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // iptables varlığı yeterli — nfnetlink_queue otomatik yüklenir
+        return std::process::Command::new("which")
+            .arg("iptables")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+    }
+    #[allow(unreachable_code)]
+    false
 }
 
 #[tauri::command]
 fn install_driver(app: tauri::AppHandle) -> Result<(), String> {
-    let resource_path = app
-        .path()
-        .resource_dir()
-        .map_err(|e| e.to_string())?
-        .join("binaries/npcap-installer.exe");
+    #[cfg(target_os = "windows")]
+    {
+        let resource_path = app
+            .path()
+            .resource_dir()
+            .map_err(|e| e.to_string())?
+            .join("binaries/npcap-installer.exe");
 
-    if !resource_path.exists() {
-        return Err("Sürücü dosyası bulunamadı. Lütfen uygulamayı yeniden yükleyin.".into());
+        if !resource_path.exists() {
+            return Err("Sürücü dosyası bulunamadı. Lütfen uygulamayı yeniden yükleyin.".into());
+        }
+
+        let status = std::process::Command::new(resource_path)
+            .status()
+            .map_err(|e| e.to_string())?;
+
+        return if status.success() {
+            Ok(())
+        } else {
+            Err("Kurulum kullanıcı tarafından iptal edildi veya başarısız oldu.".into())
+        };
     }
-
-    // Bu sayede kullanıcı UAC (Yönetici İzni) uyarısını görebilir ve kurulumu tamamlayabilir.
-    let status = std::process::Command::new(resource_path)
-        .status() // Normal status call, shows window
-        .map_err(|e| e.to_string())?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err("Kurulum kullanıcı tarafından iptal edildi veya başarısız oldu.".into())
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        let _ = std::process::Command::new("modprobe").arg("nfnetlink_queue").status();
+        let _ = std::process::Command::new("modprobe").arg("xt_NFQUEUE").status();
+        return Ok(());
     }
+    #[allow(unreachable_code)]
+    Err("Bu platformda desteklenmez.".into())
 }
 
 #[tauri::command]
@@ -1888,17 +2264,17 @@ pub fn run() {
         use winapi::um::errhandlingapi::GetLastError;
         use winapi::um::synchapi::CreateMutexW;
 
-        let mutex_name: Vec<u16> = "Global\\DarknesDPI_SingleInstance\0".encode_utf16().collect();
+        let mutex_name: Vec<u16> = "Global\\S2shenDPI_SingleInstance\0".encode_utf16().collect();
 
         unsafe {
             let handle = CreateMutexW(null_mut(), 0, mutex_name.as_ptr());
             if handle.is_null() || GetLastError() == ERROR_ALREADY_EXISTS {
-                eprintln!("[STARTUP] ❌ DarknesDPI zaten çalışıyor — çıkılıyor");
+                eprintln!("[STARTUP] ❌ S2shenDPI zaten çalışıyor — çıkılıyor");
 
                 use winapi::um::winuser::{
                     FindWindowW, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
                 };
-                let window_name: Vec<u16> = "DarknesDPI\0".encode_utf16().collect();
+                let window_name: Vec<u16> = "S2shenDPI\0".encode_utf16().collect();
                 let hwnd = FindWindowW(null_mut(), window_name.as_ptr());
                 if !hwnd.is_null() {
                     if IsIconic(hwnd) != 0 {
@@ -1911,6 +2287,25 @@ pub fn run() {
             }
             let _ = handle;
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let lock_path = std::path::PathBuf::from("/tmp/s2shendpi.lock");
+        // Önceki PID dosyasını kontrol et
+        if let Ok(pid_str) = std::fs::read_to_string(&lock_path) {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                // Süreç hâlâ çalışıyor mu?
+                let alive = unsafe { libc::kill(pid, 0) } == 0;
+                if alive {
+                    eprintln!("[STARTUP] ❌ S2shenDPI zaten çalışıyor (PID {}) — çıkılıyor", pid);
+                    std::process::exit(0);
+                }
+            }
+        }
+        // Kendi PID'imizi yaz
+        let my_pid = unsafe { libc::getpid() };
+        let _ = std::fs::write(&lock_path, my_pid.to_string());
     }
 
     tauri::Builder::default()
@@ -1941,7 +2336,7 @@ pub fn run() {
                     .menu(&menu)
                     .show_menu_on_left_click(false) // ✅ Sol tıkta menü açılmasın, sadece sağ tıkta
                     .icon(app.default_window_icon().expect("app icon missing").clone())
-                    .tooltip("DarknesDPI - Kapalı")
+                    .tooltip("S2shenDPI - Kapalı")
                     .on_menu_event(|app, event| match event.id.as_ref() {
                         "quit" => {
                             if let Some(window) = app.get_webview_window("main") {
@@ -2084,9 +2479,15 @@ pub fn run() {
                     if let Ok(mut guard) = state.join_handle.lock() {
                         let _ = guard.take();
                     }
-                    #[cfg(target_os = "windows")]
+                    #[cfg(any(target_os = "windows", target_os = "linux"))]
                     manage_firewall_rules(false, 0, 0);
                 }
             }
         });
+
+    #[cfg(target_os = "linux")]
+    {
+        // PID lock dosyasını temizle
+        let _ = std::fs::remove_file("/tmp/s2shendpi.lock");
+    }
 }

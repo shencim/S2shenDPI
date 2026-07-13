@@ -76,52 +76,32 @@
   <!-- Alt yatay ince çizgi -->
   <line x1="140" y1="364" x2="372" y2="364" stroke="#cc0000" stroke-width="1" opacity="0.5"/>
 
-  <!-- Ana D harfi gövdesi - kalın serif D -->
-  <!-- Sol dikey çubuk -->
-  <rect x="138" y="142" width="52" height="228" rx="8" fill="url(#dGrad)" filter="url(#shadow)"/>
+  <!-- Ana S harfi gövdesi - kalın S monogramı -->
+  <text
+    x="256"
+    y="360"
+    font-family="'Arial Black', 'Impact', sans-serif"
+    font-size="300"
+    font-weight="900"
+    fill="url(#dGrad)"
+    text-anchor="middle"
+    filter="url(#shadow)"
+  >S</text>
 
-  <!-- D'nin yay kısmı (sağ kavis) - büyük path -->
-  <path d="
-    M 184 142
-    L 270 142
-    Q 390 142 390 256
-    Q 390 370 270 370
-    L 184 370
-    Z
-  " fill="url(#dGrad)" filter="url(#shadow)"/>
+  <!-- S harfi üst parlama (highlight) -->
+  <text
+    x="256"
+    y="358"
+    font-family="'Arial Black', 'Impact', sans-serif"
+    font-size="300"
+    font-weight="900"
+    fill="white"
+    text-anchor="middle"
+    opacity="0.08"
+  >S</text>
 
-  <!-- İç boşluk (D'nin içi) - siyah -->
-  <path d="
-    M 192 194
-    L 262 194
-    Q 334 194 334 256
-    Q 334 318 262 318
-    L 192 318
-    Z
-  " fill="#0a0202"/>
-
-  <!-- İç boşluğa hafif kırmızı yansıma -->
-  <path d="
-    M 192 194
-    L 262 194
-    Q 334 194 334 256
-    Q 334 318 262 318
-    L 192 318
-    Z
-  " fill="url(#glowGrad)" opacity="0.15"/>
-
-  <!-- D harfi üst parlama (highlight) -->
-  <path d="
-    M 148 150
-    L 270 150
-    Q 310 150 340 170
-    Q 310 158 270 158
-    L 148 158
-    Z
-  " fill="white" opacity="0.08"/>
-
-  <!-- Orta yatay aksent çizgisi (D'nin göbeğinde) -->
-  <rect x="138" y="246" width="52" height="20" rx="0" fill="#aa0000" opacity="0.5"/>
+  <!-- Orta yatay aksent çizgisi (S'in göbeğinde) -->
+  <rect x="176" y="246" width="160" height="14" rx="7" fill="#aa0000" opacity="0.35"/>
 
   <!-- Köşe dekoratif noktalar -->
   <circle cx="138" cy="142" r="5" fill="#ff3333" opacity="0.7" filter="url(#softGlow)"/>
@@ -129,7 +109,7 @@
   <circle cx="138" cy="370" r="5" fill="#ff3333" opacity="0.7" filter="url(#softGlow)"/>
   <circle cx="190" cy="370" r="3" fill="#ff3333" opacity="0.5"/>
 
-  <!-- Alt metin: DARKNES DPI -->
+  <!-- Alt metin: S2SHEN DPI -->
   <text
     x="256"
     y="428"
@@ -140,7 +120,7 @@
     text-anchor="middle"
     letter-spacing="6"
     filter="url(#softGlow)"
-  >DARKNES</text>
+  >S2SHEN</text>
 
   <text
     x="256"

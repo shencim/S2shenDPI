@@ -1,4 +1,4 @@
-# Darknes proxy (SpoofDPI 1.2.1) - PowerShell ile derleme ve kopyalama
+# S2shen proxy (SpoofDPI 1.2.1) - PowerShell ile derleme ve kopyalama
 # Kullanım: PowerShell'de proje kökünde .\scripts\build-proxy.ps1
 # veya script'e sağ tık -> "PowerShell ile Çalıştır"
 
@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $ScriptDir
 $SpoofDpiSrc = Join-Path $Root "SpoofDPI-1.2.1\SpoofDPI-1.2.1"
-$OutExe = Join-Path $Root "spoofdpi\darknes-proxy.exe"
+$OutExe = Join-Path $Root "spoofdpi\s2shen-proxy.exe"
 $BinariesDir = Join-Path $Root "src-tauri\binaries"
 
 # Go var mı?
@@ -28,7 +28,7 @@ if (-not (Test-Path $spoofdpiDir)) {
     New-Item -ItemType Directory -Path $spoofdpiDir -Force | Out-Null
 }
 
-Write-Host "SpoofDPI (darknes-proxy) derleniyor..." -ForegroundColor Cyan
+Write-Host "SpoofDPI (s2shen-proxy) derleniyor..." -ForegroundColor Cyan
 Push-Location $SpoofDpiSrc
 try {
     go build -trimpath -ldflags "-s -w" -o $OutExe ./cmd/spoofdpi
@@ -46,7 +46,7 @@ Write-Host "Derleme tamam: $OutExe" -ForegroundColor Green
 if (-not (Test-Path $BinariesDir)) {
     New-Item -ItemType Directory -Path $BinariesDir -Force | Out-Null
 }
-Copy-Item -Path $OutExe -Destination (Join-Path $BinariesDir "darknes-proxy.exe") -Force
-Copy-Item -Path $OutExe -Destination (Join-Path $BinariesDir "darknes-proxy-x86_64-pc-windows-msvc.exe") -Force
-Write-Host "Kopyalandi: src-tauri\binaries\darknes-proxy.exe (ve -x86_64-pc-windows-msvc.exe)" -ForegroundColor Green
+Copy-Item -Path $OutExe -Destination (Join-Path $BinariesDir "s2shen-proxy.exe") -Force
+Copy-Item -Path $OutExe -Destination (Join-Path $BinariesDir "s2shen-proxy-x86_64-pc-windows-msvc.exe") -Force
+Write-Host "Kopyalandi: src-tauri\binaries\s2shen-proxy.exe (ve -x86_64-pc-windows-msvc.exe)" -ForegroundColor Green
 Write-Host "Bitti. Uygulamayi calistirabilirsiniz (npm run tauri dev veya build)." -ForegroundColor Cyan

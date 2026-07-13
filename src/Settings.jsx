@@ -69,10 +69,29 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies,
   };
 
   // Özel domain listesi
+  // Yalnızca harf/rakam/tire/nokta ve başta isteğe bağlı "*." joker karakterine izin verilir —
+  // Rust tarafındaki (PAC/ProxyOverride enjeksiyonuna karşı) doğrulamayla aynı kural.
+  const isValidBypassDomain = (val) => {
+    const rest = val.startsWith('*.') ? val.slice(2) : val;
+    return (
+      rest.length > 0 &&
+      val.length <= 253 &&
+      /^[a-z0-9.-]+$/.test(rest) &&
+      !rest.startsWith('.') &&
+      !rest.startsWith('-') &&
+      !rest.endsWith('-')
+    );
+  };
   const [domainInput, setDomainInput] = useState('');
+  const [domainError, setDomainError] = useState(false);
   const handleAddDomain = () => {
     const val = domainInput.trim().toLowerCase();
     if (!val) return;
+    if (!isValidBypassDomain(val)) {
+      setDomainError(true);
+      return;
+    }
+    setDomainError(false);
     const current = config.customDomains || [];
     if (!current.includes(val)) {
       updateConfig('customDomains', [...current, val]);
@@ -196,7 +215,7 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies,
       await invoke('clear_system_proxy');
       
       // P1-FIX: Ana ekrandaki bağlantı durumunu eşzamanlı güncelle
-      window.dispatchEvent(new CustomEvent('darknesdpi-force-disconnect', {
+      window.dispatchEvent(new CustomEvent('s2shendpi-force-disconnect', {
         detail: { reason: 'manual-fix' }
       }));
       
@@ -429,12 +448,20 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies,
               transition={{ duration: 0.2, ease: "easeInOut" }}
               style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}
             >
+              {config.networkMode === 'discordSplit' && (
+                <div className="v2-card" style={{ padding: '0.85rem 1rem', background: 'rgba(96, 165, 250, 0.08)', border: '1px solid rgba(96, 165, 250, 0.25)' }}>
+                  <p style={{ fontSize: '0.78rem', color: '#93c5fd', lineHeight: 1.5, margin: 0 }}>
+                    🎯 {t.discordSplitActiveNotice}
+                  </p>
+                </div>
+              )}
+
               {/* ========== 1. İSS AKILLI REHBERİ (PREMIUM UX) ========== */}
               <div className="v2-section">
                 <div className="v2-section-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Globe size={14} /> {t.issGuideTitle}
                 </div>
-                
+
                 <div style={{
                   background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.4) 100%)',
                   border: '1px solid rgba(255, 255, 255, 0.05)',
@@ -828,6 +855,16 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies,
                           desc: t.modeSuperDesc,
                           needsNpcap: false,
                         },
+                        {
+                          id: 'discordSplit',
+                          icon: '🎯',
+                          color: '#60a5fa',
+                          bg: 'rgba(96, 165, 250, 0.08)',
+                          border: 'rgba(96, 165, 250, 0.25)',
+                          title: t.modeDiscordSplit,
+                          desc: t.modeDiscordSplitDesc,
+                          needsNpcap: false,
+                        },
                       ].map((mode) => {
                         const isActive = (config.networkMode || 'smooth') === mode.id;
                         return (
@@ -916,7 +953,7 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies,
                     <input
                       type="text"
                       value={domainInput}
-                      onChange={e => setDomainInput(e.target.value)}
+                      onChange={e => { setDomainInput(e.target.value); setDomainError(false); }}
                       onKeyDown={e => e.key === 'Enter' && handleAddDomain()}
                       placeholder={t.domainPlaceholder}
                       style={{
@@ -935,6 +972,11 @@ const Settings = ({ onBack, config, updateConfig, dnsLatencies, setDnsLatencies,
                       {t.domainAdd}
                     </button>
                   </div>
+                  {domainError && (
+                    <p style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
+                      {t.domainInvalid}
+                    </p>
+                  )}
                   {(config.customDomains || []).length === 0 ? (
                     <p style={{ fontSize: '0.75rem', color: '#52525b', textAlign: 'center', padding: '0.5rem 0' }}>{t.domainEmpty}</p>
                   ) : (

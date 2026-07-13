@@ -53,11 +53,18 @@ const (
 func runEngine(cfg *Config) {
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		runRSTDropper()
-	}()
+	// RST dropper, gelen TÜM inbound RST paketlerini (443/80, hangi uygulamaya
+	// ait olursa olsun) düşürür — SNI bazlı hedeflenemez (RST paketinin payload'ı
+	// yoktur, hangi bağlantıya ait olduğu bağlantı takibi olmadan bilinemez).
+	// Discord Split (SNIFilter) modunda "yalnızca Discord'a dokun" ilkesini
+	// bozmamak için bu global davranış devre dışı bırakılır.
+	if !cfg.SNIFilter {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runRSTDropper()
+		}()
+	}
 
 	if cfg.BlockQUIC {
 		wg.Add(1)
@@ -67,7 +74,7 @@ func runEngine(cfg *Config) {
 		}()
 	}
 
-	if cfg.AutoTTL || cfg.WrongChksum || cfg.WrongSeq {
+	if cfg.AutoTTL || cfg.WrongChksum || cfg.WrongSeq || cfg.SNIFilter {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -148,7 +155,7 @@ func isQUICInitial(payload []byte) bool {
 		return false
 	}
 	version := binary.BigEndian.Uint32(payload[1:5])
-	return version == 0x00000001 || version == 0xff00001d || version == 0x1 ||
+	return version == 0x00000001 || version == 0xff00001d ||
 		version == 0x6b3343cf || version == 0xff000020 || version == 0xff00001e
 }
 
@@ -231,6 +238,29 @@ func processTCPOutbound(h syscall.Handle, pkt []byte, addr []byte, cfg *Config) 
 		return
 	}
 
+	// Discord Split (SNIFilter): yalnızca SNI'si allowlist'te olan bağlantılara
+	// dokunulur. SNI parse edilemezse (segmentli/anomali ClientHello) ya da
+	// allowlist'te değilse, paket hiç değiştirilmeden geçirilir — bu sayede
+	// oyun/tarayıcı trafiği bu modda kesinlikle etkilenmez.
+	if cfg.SNIFilter {
+		hostname, ok := parseSNI(payload)
+		if !ok || !matchesSNIAllowlist(hostname, discordSNIAllowlist) {
+			_ = divertSend(h, pkt, addr)
+			return
+		}
+	}
+
+	// Turbo (DpiTier "0"): en düşük gecikme için fragmentation/fake paket
+	// enjeksiyonu yapılmaz, yalnızca pasif TTL ayarı uygulanır.
+	if cfg.DpiTier == "0" {
+		if cfg.AutoTTL {
+			applyAutoTTL(pkt, addr)
+			divertCalcChecksums(pkt, addr, 0)
+		}
+		_ = divertSend(h, pkt, addr)
+		return
+	}
+
 	if cfg.WrongChksum {
 		sendFakeWrongChksum(h, pkt, addr)
 	}
@@ -243,7 +273,7 @@ func processTCPOutbound(h syscall.Handle, pkt []byte, addr []byte, cfg *Config) 
 		applyAutoTTL(pkt, addr)
 	}
 
-	sendFragmented(h, pkt, addr)
+	sendFragmented(h, pkt, addr, cfg)
 }
 
 func sendFakeWrongChksum(h syscall.Handle, pkt []byte, addr []byte) {
@@ -327,19 +357,22 @@ func applyFakeTTL(pkt []byte, addr []byte) {
 	setPktTTL(pkt, fakeTTL)
 }
 
-func sendFragmented(h syscall.Handle, pkt []byte, addr []byte) {
+func sendFragmented(h syscall.Handle, pkt []byte, addr []byte, cfg *Config) {
 	ihl := ipv4HeaderLen(pkt)
 	thl := tcpDataOffset(pkt)
 	headerSize := ihl + thl
 	payload := pkt[headerSize:]
 
-	if len(payload) < 4 || headerSize+4 > len(pkt) {
+	splitAt := cfg.ChunkSize
+	if splitAt < 1 {
+		splitAt = 1
+	}
+
+	if len(payload) <= splitAt || headerSize+splitAt > len(pkt) {
 		divertCalcChecksums(pkt, addr, 0)
 		_ = divertSend(h, pkt, addr)
 		return
 	}
-
-	splitAt := 2
 
 	frag1 := make([]byte, headerSize+splitAt)
 	copy(frag1, pkt[:headerSize])
